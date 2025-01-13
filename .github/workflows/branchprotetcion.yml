@@ -27,7 +27,7 @@ jobs:
           branch="${{ github.event.inputs.branch }}"
           environment="${{ github.event.inputs.environment }}"
 
-          # Check if the environment exists (GitHub does not create it automatically)
+          # Check if the environment exists
           echo "Checking if environment $environment exists..."
           environment_check=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $AUTH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
@@ -38,21 +38,26 @@ jobs:
             exit 1
           fi
 
+          # JSON payload
+          json_payload=$(cat <<EOF
+          {
+            "wait_timer": 30,
+            "reviewers": {
+              "users": []
+            },
+            "deployment_branch_policy": {
+              "protected_branches": true,
+              "custom_branch_policies": false
+            }
+          }
+          EOF
+          )
+
           # Apply protection rules to the environment
           echo "Applying branch protection rules for branch $branch in environment $environment..."
           curl -X PUT -H "Authorization: Bearer $AUTH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/$owner/$repo/environments/$environment \
-            -d '{
-              "wait_timer": 30,
-              "reviewers": {
-                "users": [],
-                "teams": ["team-slug"]  # Replace with your actual team slug
-              },
-              "deployment_branch_policy": {
-                "protected_branches": true,
-                "custom_branch_policies": false
-              }
-            }'
+            -d "$json_payload"
 
           echo "Environment-specific protection rules applied to branch $branch in environment $environment"
