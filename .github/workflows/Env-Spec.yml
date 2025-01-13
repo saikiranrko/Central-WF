@@ -19,8 +19,8 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write  # Access to repository contents
-      deployments: write  # Required to interact with environments
+      contents: write
+      deployments: write
 
     steps:
       - name: Validate Inputs
@@ -40,9 +40,9 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
         with:
-          repository: ${{ inputs.repo_name }}  # Specify the repository dynamically
-          ref: ${{ inputs.branch_or_tag }}    # Specify the branch or tag dynamically
-          token: ${{ secrets.GITHUB_TOKEN }}  # Use GitHub token for authentication
+          repository: ${{ inputs.repo_name }}
+          ref: ${{ inputs.branch_or_tag }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set Up Environment Variables
         run: |
@@ -57,5 +57,5 @@ jobs:
           echo "Deploying to repository: ${{ inputs.repo_name }}"
           echo "Branch or tag: ${{ inputs.branch_or_tag }}"
           echo "Environment: ${{ inputs.environment_name }}"
-          # Replace the following command with your deployment logic
+          # Replace this line with your deployment logic
           echo "Deployment successful for environment: ${{ inputs.environment_name }}"
