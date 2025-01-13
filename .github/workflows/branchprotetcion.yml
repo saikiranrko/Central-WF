@@ -40,6 +40,14 @@ jobs:
 
           # Prepare JSON payload
           json_payload=$(cat <<EOF
+{
+  "deployment_branch_policy": {
+    "protected_branches": true,
+    "custom_branch_policies": false
+  }
+}
+EOF
+)
 
           # Apply protection rules
           echo "Applying branch protection rules for branch $branch in environment $environment..."
