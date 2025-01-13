@@ -35,7 +35,7 @@ jobs:
           fi
 
           # Define GraphQL mutation for branch protection
-          graphql_query=$(cat <<- 'EOF'
+          graphql_query=$(cat <<EOF
 {
   "query": "mutation {
     createBranchProtectionRule(input: {
