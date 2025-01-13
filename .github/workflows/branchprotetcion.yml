@@ -21,16 +21,47 @@ jobs:
           repo=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f2)
           branch_pattern="${{ github.event.inputs.branch_pattern }}"
           
-          # Fetch repository ID
-          echo "Fetching repository ID for $owner/$repo..."
-          repo_id=$(curl -s -H "Authorization: Bearer $AUTH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$owner/$repo" | jq -r .node_id)
+          # Debug information
+          echo "Owner: $owner"
+          echo "Repository: $repo"
+          echo "Branch Pattern: $branch_pattern"
           
-          if [ -z "$repo_id" ] || [ "$repo_id" = "null" ]; then
-            echo "Error: Failed to fetch repository ID. Please check the repository name or token permissions."
+          # Test API access
+          echo "Testing API access..."
+          api_test=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer $AUTH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/user")
+          
+          if [ "$api_test" != "200" ]; then
+            echo "Error: GitHub API access failed. Status code: $api_test"
+            echo "Please check if the PAT_TOKEN has correct permissions:"
+            echo "- repo (Full control of private repositories)"
+            echo "- workflow (Update GitHub Action workflows)"
             exit 1
           fi
+          
+          # Fetch repository ID with error handling
+          echo "Fetching repository ID for $owner/$repo..."
+          repo_response=$(curl -s \
+            -H "Authorization: Bearer $AUTH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$owner/$repo")
+          
+          repo_id=$(echo "$repo_response" | jq -r .node_id)
+          
+          if [ -z "$repo_id" ] || [ "$repo_id" = "null" ]; then
+            echo "Error: Failed to fetch repository ID."
+            echo "API Response:"
+            echo "$repo_response" | jq '.'
+            echo "Please check:"
+            echo "1. Repository name is correct"
+            echo "2. PAT_TOKEN has access to the repository"
+            echo "3. Repository exists"
+            exit 1
+          fi
+          
+          echo "Successfully found repository ID: $repo_id"
           
           # Create GraphQL mutation
           read -r -d '' QUERY << 'GRAPHQL'
@@ -67,12 +98,20 @@ jobs:
               }
             }')
           
-          # Execute GraphQL mutation
+          # Execute GraphQL mutation with error handling
           echo "Applying branch protection rules for pattern '$branch_pattern'..."
-          curl -X POST \
+          graphql_response=$(curl -s -X POST \
             -H "Authorization: Bearer $AUTH_TOKEN" \
             -H "Content-Type: application/json" \
             https://api.github.com/graphql \
-            -d "$json_body"
+            -d "$json_body")
           
-          echo "Branch protection rules applied for branch pattern '$branch_pattern' in repo $owner/$repo."
+          if echo "$graphql_response" | jq -e '.errors' >/dev/null; then
+            echo "Error: GraphQL mutation failed:"
+            echo "$graphql_response" | jq '.errors'
+            exit 1
+          fi
+          
+          echo "Success! Branch protection rules applied for branch pattern '$branch_pattern' in repo $owner/$repo."
+          echo "Response:"
+          echo "$graphql_response" | jq '.'
