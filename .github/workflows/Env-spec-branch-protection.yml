@@ -1,4 +1,4 @@
-name: Configure Environment Deployment Rules
+name: Configure Environment Deployment Rules with Tag Protection
 
 on:
   workflow_dispatch:
@@ -44,8 +44,7 @@ jobs:
             echo "Error: Environment not found"
             exit 1
           fi
-
-          # Log environment details
+          
           echo "Environment details:"
           echo "$env_response" | jq '.'
 
@@ -74,7 +73,6 @@ jobs:
                 echo "Error: Branch patterns required for 'selected' type"
                 exit 1
               fi
-              echo "Branch patterns provided: $patterns"
               deployment_rules='{
                 "deployment_branch_policy": {
                   "protected_branches": false,
@@ -88,7 +86,7 @@ jobs:
               exit 1
               ;;
           esac
-          
+
           # Update environment settings
           echo "Updating environment deployment rules..."
           response=$(curl -s -X PUT \
@@ -107,3 +105,26 @@ jobs:
           echo "Successfully updated deployment rules for environment '$env_name'"
           echo "Configuration:"
           echo "$response" | jq '.'
+
+      - name: Apply Tag Protection Rules for Environment
+        if: startsWith(inputs.deployment_rule, 'selected') && inputs.branch_patterns != ''
+        run: |
+          echo "Applying tag protection rules for environment ${{ github.event.inputs.environment }}..."
+          IFS=',' read -ra pattern_array <<< "${{ github.event.inputs.branch_patterns }}"
+          for pattern in "${pattern_array[@]}"; do
+            echo "Applying protection for tag pattern: $pattern"
+            curl -s -X PUT \
+              -H "Authorization: Bearer ${{ secrets.PAT_TOKEN }}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/json" \
+              "https://api.github.com/repos/${{ github.event.inputs.repo }}/branches/$pattern/protection" \
+              -d '{
+                "required_status_checks": null,
+                "enforce_admins": true,
+                "required_pull_request_reviews": {
+                  "dismiss_stale_reviews": true,
+                  "require_code_owner_reviews": true
+                },
+                "restrictions": null
+              }'
+          done
