@@ -1,0 +1,50 @@
+name: Add Branch Protection for Pattern
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "Repository name (owner/repo)"
+        required: true
+      branch_pattern:
+        description: "Branch pattern to apply protection (e.g., release/*)"
+        required: true
+jobs:
+  set-branch-protection:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply Branch Protection for Pattern
+        env:
+          AUTH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          # Parse inputs
+          owner=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f1)
+          repo=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f2)
+          branch_pattern="${{ github.event.inputs.branch_pattern }}"
+          
+          # Fetch repository ID
+          echo "Fetching repository ID for $owner/$repo..."
+          repo_id=$(curl -s -H "Authorization: Bearer $AUTH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$owner/$repo" | jq -r .node_id)
+          
+          # Check repository ID
+          if [ -z "$repo_id" ] || [ "$repo_id" = "null" ]; then
+            echo "Error: Failed to fetch repository ID. Check repository name and token permissions."
+            exit 1
+          fi
+          
+          # Execute GraphQL mutation
+          echo "Applying branch protection rules..."
+          curl -s -X POST \
+            -H "Authorization: Bearer $AUTH_TOKEN" \
+            -H "Content-Type: application/json" \
+            https://api.github.com/graphql \
+            -d "{
+              \"query\": \"mutation(\$repositoryId: ID!, \$pattern: String!) { createBranchProtectionRule(input: { repositoryId: \$repositoryId, pattern: \$pattern, requiresApprovingReviews: true, requiredApprovingReviewCount: 2, dismissesStaleReviews: true, requiresCodeOwnerReviews: true, isAdminEnforced: true, allowsForcePushes: false, allowsDeletions: false }) { branchProtectionRule { id pattern } } }\",
+              \"variables\": {
+                \"repositoryId\": \"$repo_id\",
+                \"pattern\": \"$branch_pattern\"
+              }
+            }" | jq '.'
+          
+          echo "Branch protection rules applied for '$branch_pattern' in $owner/$repo."
