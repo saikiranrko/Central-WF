@@ -15,6 +15,9 @@ on:
 
 jobs:
   set-environment-protection:
+    permissions:
+      contents: write
+      deployments: write
     runs-on: ubuntu-latest
     steps:
       - name: Apply Environment-Specific Branch Protection
@@ -26,7 +29,6 @@ jobs:
           branch="${{ github.event.inputs.branch }}"
           environment="${{ github.event.inputs.environment }}"
 
-          # Update environment-specific protection rules
           curl -X PUT -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/$owner/$repo/environments/$environment \
@@ -39,9 +41,6 @@ jobs:
               "deployment_branch_policy": {
                 "protected_branches": true,
                 "custom_branch_policies": false
-              },
-              "allow_deployment_from": {
-                "branches": ["'"$branch"'"]
               }
             }'
 
