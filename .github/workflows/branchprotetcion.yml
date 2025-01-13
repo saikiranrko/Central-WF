@@ -1,5 +1,4 @@
 name: Add Branch Protection for Pattern
-
 on:
   workflow_dispatch:
     inputs:
@@ -9,7 +8,6 @@ on:
       branch_pattern:
         description: "Branch pattern to apply protection (e.g., release/*)"
         required: true
-
 jobs:
   set-branch-protection:
     runs-on: ubuntu-latest
@@ -22,48 +20,65 @@ jobs:
           owner=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f1)
           repo=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f2)
           branch_pattern="${{ github.event.inputs.branch_pattern }}"
-
+          
           # Fetch repository ID
           echo "Fetching repository ID for $owner/$repo..."
           repo_id=$(curl -s -H "Authorization: Bearer $AUTH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/$owner/$repo | jq -r .node_id)
-
+          
           if [ -z "$repo_id" ] || [ "$repo_id" = "null" ]; then
             echo "Error: Failed to fetch repository ID. Please check the repository name or token permissions."
             exit 1
           fi
-
+          
           # Define GraphQL mutation for branch protection
-          graphql_query=$(cat <<EOF
-{
-  "query": "mutation {
-    createBranchProtectionRule(input: {
-      repositoryId: \"$repo_id\",
-      pattern: \"$branch_pattern\",
-      requiresApprovingReviews: true,
-      requiredApprovingReviewCount: 2,
-      dismissesStaleReviews: true,
-      requiresCodeOwnerReviews: true,
-      isAdminEnforced: true,
-      allowsForcePushes: false,
-      allowsDeletions: false
-    }) {
-      branchProtectionRule {
-        id
-        pattern
-      }
+          graphql_query=$(cat <<'EOF'
+mutation($repositoryId: ID!, $pattern: String!) {
+  createBranchProtectionRule(input: {
+    repositoryId: $repositoryId,
+    pattern: $pattern,
+    requiresApprovingReviews: true,
+    requiredApprovingReviewCount: 2,
+    dismissesStaleReviews: true,
+    requiresCodeOwnerReviews: true,
+    isAdminEnforced: true,
+    allowsForcePushes: false,
+    allowsDeletions: false
+  }) {
+    branchProtectionRule {
+      id
+      pattern
     }
-  }"
+  }
 }
 EOF
 )
-
+          
+          # Create variables JSON
+          variables_json=$(cat <<EOF
+{
+  "repositoryId": "$repo_id",
+  "pattern": "$branch_pattern"
+}
+EOF
+)
+          
+          # Combine query and variables
+          request_body=$(cat <<EOF
+{
+  "query": $(echo "$graphql_query" | jq -R -s '.'),
+  "variables": $variables_json
+}
+EOF
+)
+          
           # Execute GraphQL mutation
           echo "Applying branch protection rules for pattern '$branch_pattern'..."
-          curl -X POST -H "Authorization: Bearer $AUTH_TOKEN" \
+          curl -X POST \
+            -H "Authorization: Bearer $AUTH_TOKEN" \
             -H "Content-Type: application/json" \
             https://api.github.com/graphql \
-            -d "$graphql_query"
-
+            -d "$request_body"
+          
           echo "Branch protection rules applied for branch pattern '$branch_pattern' in repo $owner/$repo."
