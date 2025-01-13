@@ -1,29 +1,52 @@
-- name: Apply Environment-Specific Branch Protection
-  env:
-    AUTH_TOKEN: ${{ secrets.PAT_TOKEN }}
-  run: |
-    # Parse inputs
-    owner=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f1)
-    repo=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f2)
-    branch="${{ github.event.inputs.branch }}"
-    environment="${{ github.event.inputs.environment }}"
-    reviewers="${{ github.event.inputs.reviewers }}"
+name: Add Branch Protection Rules
 
-    # Check if the environment exists
-    echo "Checking if environment $environment exists..."
-    environment_check=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $AUTH_TOKEN" \
-      -H "Accept: application/vnd.github+json" \
-      https://api.github.com/repos/$owner/$repo/environments/$environment)
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "Repository name (owner/repo)"
+        required: true
+      branch:
+        description: "Branch name to apply protection"
+        required: true
+      environment:
+        description: "Environment name to apply protection rules"
+        required: true
+      reviewers:
+        description: "Comma-separated list of reviewers (optional)"
+        required: false
+        default: ""
 
-    if [ "$environment_check" -ne 200 ]; then
-      echo "Error: Environment '$environment' does not exist in repository '$repo'. Please create it manually before running this workflow."
-      exit 1
-    fi
+jobs:
+  set-environment-protection:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply Branch Protection Rules
+        env:
+          AUTH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          # Parse inputs
+          owner=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f1)
+          repo=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f2)
+          branch="${{ github.event.inputs.branch }}"
+          environment="${{ github.event.inputs.environment }}"
+          reviewers="${{ github.event.inputs.reviewers }}"
 
-    # Prepare JSON payload
-    if [ -n "$reviewers" ]; then
-      reviewers_array=$(echo "$reviewers" | jq -R 'split(",")')
-      json_payload=$(cat <<EOF
+          # Check if the environment exists
+          echo "Checking if environment $environment exists..."
+          environment_check=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $AUTH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/$owner/$repo/environments/$environment)
+
+          if [ "$environment_check" -ne 200 ]; then
+            echo "Error: Environment '$environment' does not exist in repository '$repo'. Please create it manually before running this workflow."
+            exit 1
+          fi
+
+          # Prepare JSON payload
+          if [ -n "$reviewers" ]; then
+            reviewers_array=$(echo "$reviewers" | jq -R 'split(",")')
+            json_payload=$(cat <<EOF
 {
   "wait_timer": 30,
   "reviewers": {
@@ -36,8 +59,8 @@
 }
 EOF
 )
-    else
-      json_payload=$(cat <<EOF
+          else
+            json_payload=$(cat <<EOF
 {
   "wait_timer": 30,
   "deployment_branch_policy": {
@@ -47,15 +70,15 @@ EOF
 }
 EOF
 )
-    fi
+          fi
 
-    # Apply protection rules
-    echo "Applying branch protection rules for branch $branch in environment $environment..."
-    echo "Payload: $json_payload"
+          # Apply protection rules
+          echo "Applying branch protection rules for branch $branch in environment $environment..."
+          echo "Payload: $json_payload"
 
-    curl -X PUT -H "Authorization: Bearer $AUTH_TOKEN" \
-      -H "Accept: application/vnd.github+json" \
-      https://api.github.com/repos/$owner/$repo/environments/$environment \
-      -d "$json_payload"
+          curl -X PUT -H "Authorization: Bearer $AUTH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/$owner/$repo/environments/$environment \
+            -d "$json_payload"
 
-    echo "Environment-specific protection rules applied to branch $branch in environment $environment"
+          echo "Environment-specific protection rules applied to branch $branch in environment $environment"
