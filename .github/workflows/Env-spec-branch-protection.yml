@@ -56,8 +56,8 @@ jobs:
             exit 1
           fi
 
-          # Update environment with selected branch/tag patterns
-          echo "Updating environment with selected branch/tag patterns..."
+          # Update environment with deployment branch policy
+          echo "Updating environment deployment branch policy..."
           update_response=$(curl -s -X PUT \
             -H "Authorization: Bearer $AUTH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
@@ -66,10 +66,9 @@ jobs:
             -d '{
               "deployment_branch_policy": {
                 "protected_branches": false,
-                "custom_branch_policies": true
-              },
-              "name": "'"$env_name"'",
-              "branch_policies": '"$pattern_json"'
+                "custom_branch_policies": true,
+                "patterns": '"$pattern_json"'
+              }
             }')
 
           if echo "$update_response" | jq -e '.message' >/dev/null; then
