@@ -23,19 +23,6 @@ jobs:
     environment: ${{ github.event.inputs.environment }}
     
     steps:
-      - name: Check Admin Access
-        run: |
-          ADMIN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repository }}" | jq -r '.permissions.admin')
-          
-          if [ "$ADMIN_STATUS" = "true" ]; then
-            echo "Admin access verified"
-          else
-            echo "Error: Admin access required"
-            exit 1
-          fi
       - name: Create Environment
         run: |
           curl -X PUT \
