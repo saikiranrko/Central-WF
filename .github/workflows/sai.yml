@@ -1,4 +1,4 @@
-name: ADD Tag Protection Rule
+name: Add Tag Protection Ruleset
 
 on:
   workflow_dispatch:
@@ -7,50 +7,52 @@ on:
         description: 'Repository name (e.g., owner/repo)'
         required: true
         type: string
-      environment:
-        description: 'Environment name'
-        required: true
-        type: string
       tag_pattern:
         description: 'Tag pattern to protect (e.g., v*)'
         required: true
         type: string
 
 jobs:
-  add_tag_protection_rule:
+  add_tag_protection_ruleset:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       actions: write
 
     steps:
-      - name: Add Tag Protection Rule
+      - name: Add Tag Protection Ruleset
         run: |
           echo "Repository: ${{ github.event.inputs.repository }}"
-          echo "Environment: ${{ github.event.inputs.environment }}"
           echo "Tag Pattern: ${{ github.event.inputs.tag_pattern }}"
           
           # Validate inputs
-          if [[ -z "${{ github.event.inputs.repository }}" || -z "${{ github.event.inputs.environment }}" || -z "${{ github.event.inputs.tag_pattern }}" ]]; then
+          if [[ -z "${{ github.event.inputs.repository }}" || -z "${{ github.event.inputs.tag_pattern }}" ]]; then
             echo "Required inputs are missing!"
             exit 1
           fi
-          
-          # Add the tag protection rule
+
+          # Create a repository ruleset for tag protection
           curl -L \
             -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.PAT_TOKEN }}" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${{ github.event.inputs.repository }}/tags/protection" \
+            "https://api.github.com/repos/${{ github.event.inputs.repository }}/rulesets" \
             -d "{
-              \"pattern\": \"${{ github.event.inputs.tag_pattern }}\"
+              \"name\": \"Protect Tags - ${{ github.event.inputs.tag_pattern }}\",
+              \"target\": \"tag\",
+              \"rules\": [
+                {
+                  \"type\": \"pattern\",
+                  \"pattern\": \"${{ github.event.inputs.tag_pattern }}\",
+                  \"enforcement\": \"strict\"
+                }
+              ]
             }"
-      
-      - name: Verify Tag Protection Rules
+
+      - name: Verify Tag Rulesets
         run: |
-          echo "Fetching tag protection rules..."
+          echo "Fetching repository rulesets..."
           curl -L \
             -H "Authorization: Bearer ${{ secrets.PAT_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.event.inputs.repository }}/tags/protection"
+            "https://api.github.com/repos/${{ github.event.inputs.repository }}/rulesets"
