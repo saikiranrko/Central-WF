@@ -1,61 +1,49 @@
-name: Deploy to Environment
+name: Add Environment Protection Rule
 
 on:
   workflow_dispatch:
     inputs:
-      repo_name:
-        description: 'Repository name (e.g., owner/repo)'
+      environment:
+        description: 'Environment name'
         required: true
-      branch_or_tag:
-        description: 'Exact branch or tag to deploy (e.g., main or v1.0.0)'
+        type: string
+      tag_pattern:
+        description: 'Tag pattern to protect (e.g., v*)'
         required: true
-      environment_name:
-        description: 'Environment to which the deployment will be applied (e.g., dev, staging, production)'
-        required: true
+        type: string
 
 jobs:
-  deploy:
-    name: Deploy to Specified Repository and Environment
+  add_tag_protection_rule:
     runs-on: ubuntu-latest
-
     permissions:
-      contents: write
-      deployments: write
+      actions: write
+      environments: write
+      contents: read
 
     steps:
-      - name: Validate Inputs
+      - name: Add Tag Protection Rule to Environment
         run: |
-          # Validate branch or tag input
-          if [[ ! "${{ inputs.branch_or_tag }}" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
-            echo "Invalid branch or tag name: ${{ inputs.branch_or_tag }}"
-            exit 1
-          fi
+          echo "Environment: ${{ inputs.environment }}"
+          echo "Tag Pattern: ${{ inputs.tag_pattern }}"
+          
+          # Make API call to update environment protection rules
+          curl -L \
+            -X PUT \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/environments/${{ inputs.environment }} \
+            -d '{
+              "deployment_branch_policy": {
+                "protected_branches": false,
+                "custom_branch_policies": true
+              },
+              "deployment_branch_pattern": "${{ inputs.tag_pattern }}"
+            }'
 
-          # Validate environment name input
-          if [[ ! "${{ inputs.environment_name }}" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-            echo "Invalid environment name: ${{ inputs.environment_name }}"
-            exit 1
-          fi
-
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-        with:
-          repository: ${{ inputs.repo_name }}
-          ref: ${{ inputs.branch_or_tag }} # Ensure it’s an exact branch or tag
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set Up Environment Variables
+      - name: Verify Tag Protection Rule
         run: |
-          echo "Setting up environment variables dynamically"
-          echo "API_KEY=$API_KEY" >> $GITHUB_ENV
-          echo "ENV_NAME=${{ inputs.environment_name }}" >> $GITHUB_ENV
-        env:
-          API_KEY: ${{ secrets.API_KEY }}
-
-      - name: Deploy to Environment
-        run: |
-          echo "Deploying to repository: ${{ inputs.repo_name }}"
-          echo "Branch or tag: ${{ inputs.branch_or_tag }}"
-          echo "Environment: ${{ inputs.environment_name }}"
-          # Replace this line with your deployment logic
-          echo "Deployment successful for environment: ${{ inputs.environment_name }}"
+          echo "Fetching updated environment configuration..."
+          curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+               -H "Accept: application/vnd.github.v3+json" \
+               https://api.github.com/repos/${{ github.repository }}/environments/${{ inputs.environment }}
