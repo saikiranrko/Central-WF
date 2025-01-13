@@ -30,7 +30,7 @@ jobs:
           echo "Environment: ${{ inputs.environment }}"
           echo "Tag Pattern: ${{ inputs.tag_pattern }}"
           
-          # Make API call to update environment protection rules
+          # First create/update the environment with deployment branch policy
           curl -L \
             -X PUT \
             -H "Accept: application/vnd.github.v3+json" \
@@ -41,8 +41,18 @@ jobs:
               "deployment_branch_policy": {
                 "protected_branches": false,
                 "custom_branch_policies": true
-              },
-              "deployment_branch_pattern": "${{ inputs.tag_pattern }}"
+              }
+            }'
+
+          # Then add the deployment branch pattern
+          curl -L \
+            -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: Bearer ${{ secrets.PAT_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment }}/deployment-branch-policies" \
+            -d '{
+              "name": "${{ inputs.tag_pattern }}"
             }'
 
       - name: Verify Tag Protection Rule
@@ -51,3 +61,8 @@ jobs:
           curl -H "Authorization: Bearer ${{ secrets.PAT_TOKEN }}" \
                -H "Accept: application/vnd.github.v3+json" \
                "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment }}"
+          
+          echo "\nFetching deployment branch policies..."
+          curl -H "Authorization: Bearer ${{ secrets.PAT_TOKEN }}" \
+               -H "Accept: application/vnd.github.v3+json" \
+               "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment }}/deployment-branch-policies"
