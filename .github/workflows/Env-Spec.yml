@@ -1,0 +1,42 @@
+name: Deploy to Environment
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo_name:
+        description: 'Repository name (e.g., owner/repo)'
+        required: true
+      branch_or_tag:
+        description: 'Branch or tag to deploy (e.g., main or v1.0.0)'
+        required: true
+        default: 'main'
+
+jobs:
+  deploy:
+    name: Deploy to Specified Repository
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write  # Required to clone and interact with the repository
+      deployments: write  # Required for deployment actions
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ inputs.repo_name }}  # Dynamically checkout the specified repository
+          ref: ${{ inputs.branch_or_tag }}    # Dynamically use the input branch or tag
+          token: ${{ secrets.GITHUB_TOKEN }}  # Use the GitHub token to authenticate
+
+      - name: Set Up Environment
+        run: |
+          echo "Setting up environment variables dynamically"
+          echo "API_KEY=$API_KEY" >> $GITHUB_ENV
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+
+      - name: Deploy
+        run: |
+          echo "Deploying from repository: ${{ inputs.repo_name }}"
+          echo "Branch or tag: ${{ inputs.branch_or_tag }}"
+          # Add your deployment script here
