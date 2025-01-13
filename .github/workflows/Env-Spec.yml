@@ -20,9 +20,8 @@ jobs:
   add_tag_protection_rule:
     runs-on: ubuntu-latest
     permissions:
-      actions: write
       contents: write
-      administration: write
+      actions: write
 
     steps:
       - name: Add Tag Protection Rule to Environment
