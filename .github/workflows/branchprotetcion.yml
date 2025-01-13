@@ -1,0 +1,71 @@
+name: Add Branch Protection Policy
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "Repository name (owner/repo)"
+        required: true
+      branch:
+        description: "Branch name to apply protection"
+        required: true
+      tag_pattern:
+        description: "Tag pattern to protect"
+        required: true
+
+jobs:
+  set-branch-protection:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Install Octokit
+        run: npm install @octokit/rest
+
+      - name: Apply Branch Protection
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node -e "
+          const { Octokit } = require('@octokit/rest');
+          const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+
+          const [owner, repo] = '${{ github.event.inputs.repo }}'.split('/');
+          const branch = '${{ github.event.inputs.branch }}';
+          const tagPattern = '${{ github.event.inputs.tag_pattern }}';
+
+          (async () => {
+            await octokit.rest.repos.updateBranchProtection({
+              owner,
+              repo,
+              branch,
+              required_status_checks: {
+                strict: true,
+                contexts: []
+              },
+              enforce_admins: true,
+              required_pull_request_reviews: {
+                dismissal_restrictions: {},
+                dismiss_stale_reviews: true,
+                require_code_owner_reviews: true,
+                required_approving_review_count: 2
+              },
+              restrictions: null,
+              allow_force_pushes: false,
+              allow_deletions: false
+            });
+
+            console.log(\`Branch protection applied to \${branch} in repo \${repo}\`);
+
+            // Optional: Apply tag protection (not natively supported via API; simulate or document separately)
+            if (tagPattern) {
+              console.log(\`Tag protection pattern: \${tagPattern}\`);
+            }
+          })();
+          "
