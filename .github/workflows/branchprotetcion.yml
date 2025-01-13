@@ -9,63 +9,37 @@ on:
       branch:
         description: "Branch name to apply protection"
         required: true
-      tag_pattern:
-        description: "Tag pattern to protect"
-        required: true
 
 jobs:
   set-branch-protection:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16'
-
-      - name: Install Octokit
-        run: npm install @octokit/rest
-
       - name: Apply Branch Protection
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          node -e "
-          const { Octokit } = require('@octokit/rest');
-          const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+          owner=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f1)
+          repo=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f2)
+          branch="${{ github.event.inputs.branch }}"
 
-          const [owner, repo] = '${{ github.event.inputs.repo }}'.split('/');
-          const branch = '${{ github.event.inputs.branch }}';
-          const tagPattern = '${{ github.event.inputs.tag_pattern }}';
-
-          (async () => {
-            await octokit.rest.repos.updateBranchProtection({
-              owner,
-              repo,
-              branch,
-              required_status_checks: {
-                strict: true,
-                contexts: []
+          curl -X PUT -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/$owner/$repo/branches/$branch/protection \
+            -d '{
+              "required_status_checks": {
+                "strict": true,
+                "contexts": []
               },
-              enforce_admins: true,
-              required_pull_request_reviews: {
-                dismissal_restrictions: {},
-                dismiss_stale_reviews: true,
-                require_code_owner_reviews: true,
-                required_approving_review_count: 2
+              "enforce_admins": true,
+              "required_pull_request_reviews": {
+                "dismissal_restrictions": {},
+                "dismiss_stale_reviews": true,
+                "require_code_owner_reviews": true,
+                "required_approving_review_count": 2
               },
-              restrictions: null,
-              allow_force_pushes: false,
-              allow_deletions: false
-            });
+              "restrictions": null,
+              "allow_force_pushes": false,
+              "allow_deletions": false
+            }'
 
-            console.log(\`Branch protection applied to \${branch} in repo \${repo}\`);
-
-            // Optional: Apply tag protection (not natively supported via API; simulate or document separately)
-            if (tagPattern) {
-              console.log(\`Tag protection pattern: \${tagPattern}\`);
-            }
-          })();
-          "
+          echo "Branch protection applied to $branch in repository $repo"
