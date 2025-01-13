@@ -28,6 +28,7 @@ jobs:
           echo "Repository: ${{ github.event.inputs.repository }}"
           echo "Branch Name: ${{ github.event.inputs.branchname }}"
           echo "Approving Review Count: ${{ github.event.inputs.required_approving_review_count }}"
+
       - name: Check Collaborator Access
         id: check_admin_access
         run: |
@@ -36,10 +37,12 @@ jobs:
           # Simulated admin check; replace with actual API call in production
           ACTOR_ROLE="admin"
           echo "Role: $ACTOR_ROLE"
+
           if [[ "$ACTOR_ROLE" != "admin" ]]; then
             echo "You do not have permission to add branch protection rules."
             exit 1
           fi
+
       - name: Check Branch Existence
         id: branchname_check
         run: |
@@ -48,13 +51,16 @@ jobs:
             echo "Branch '${{ github.event.inputs.branchname }}' is excluded."
             exit 1
           fi
+
           echo "Simulating branch existence check for branch: ${{ github.event.inputs.branchname }}"
           # Simulated branch check; replace with actual API call in production
           BRANCH_EXISTS=true
+
           if [[ "$BRANCH_EXISTS" != true ]]; then
             echo "Branch '${{ github.event.inputs.branchname }}' does not exist in repository '${{ github.event.inputs.repository }}'."
             exit 1
           fi
+
       - name: Add Branch Protection Rules
         run: |
           echo "Adding branch protection rules for branch: ${{ github.event.inputs.branchname }}"
@@ -64,10 +70,11 @@ jobs:
             echo "Required approving review count must be at least 1."
             exit 1
           fi
+
           echo "Branch protection rules applied successfully with:"
           echo "- Required Approving Reviews: ${{ github.event.inputs.required_approving_review_count }}"
           echo "- Admin enforcement enabled"
           echo "- Force pushes and deletions disabled"
+
       - name: Complete Workflow
         run: echo "Branch protection rules have been successfully applied!"
-Update
