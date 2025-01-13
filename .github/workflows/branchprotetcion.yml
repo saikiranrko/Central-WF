@@ -23,27 +23,37 @@ jobs:
           repo=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f2)
           branch_pattern="${{ github.event.inputs.branch_pattern }}"
 
-          # Define branch protection rules
-          echo "Creating branch protection rules for branch pattern '$branch_pattern' in repo $owner/$repo..."
+          # Define GraphQL payload for branch protection rules
+          echo "Applying branch protection rules for branch pattern '$branch_pattern' in repo $owner/$repo..."
 
+          graphql_query=$(cat <<EOF
+{
+  "query": "mutation {
+    createBranchProtectionRule(input: {
+      repositoryId: \\"$(curl -s -H \\"Authorization: Bearer $AUTH_TOKEN\\" -H \\"Accept: application/vnd.github+json\\" https://api.github.com/repos/$owner/$repo | jq -r .node_id)\\",
+      pattern: \\"$branch_pattern\\",
+      requiresApprovingReviews: true,
+      requiredApprovingReviewCount: 2,
+      dismissesStaleReviews: true,
+      requiresCodeOwnerReviews: true,
+      isAdminEnforced: true,
+      allowsForcePushes: false,
+      allowsDeletions: false
+    }) {
+      branchProtectionRule {
+        id
+        pattern
+      }
+    }
+  }"
+}
+EOF
+)
+
+          # Execute GraphQL mutation
           curl -X POST -H "Authorization: Bearer $AUTH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/$owner/$repo/branch_protection_rules \
-            -d '{
-              "pattern": "'"$branch_pattern"'",
-              "required_status_checks": {
-                "strict": true,
-                "contexts": []
-              },
-              "enforce_admins": true,
-              "required_pull_request_reviews": {
-                "dismiss_stale_reviews": true,
-                "require_code_owner_reviews": true,
-                "required_approving_review_count": 2
-              },
-              "restrictions": null,
-              "allow_force_pushes": false,
-              "allow_deletions": false
-            }'
+            -H "Content-Type: application/json" \
+            https://api.github.com/graphql \
+            -d "$graphql_query"
 
           echo "Branch protection rules applied for branch pattern '$branch_pattern' in repo $owner/$repo."
