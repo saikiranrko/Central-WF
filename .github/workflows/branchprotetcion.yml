@@ -15,28 +15,39 @@ on:
 
 jobs:
   set-environment-protection:
-    permissions:
-      contents: write
-      deployments: write
     runs-on: ubuntu-latest
     steps:
       - name: Apply Environment-Specific Branch Protection
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AUTH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
+          # Parse inputs
           owner=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f1)
           repo=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f2)
           branch="${{ github.event.inputs.branch }}"
           environment="${{ github.event.inputs.environment }}"
 
-          curl -X PUT -H "Authorization: Bearer $GITHUB_TOKEN" \
+          # Check if the environment exists (GitHub does not create it automatically)
+          echo "Checking if environment $environment exists..."
+          environment_check=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $AUTH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/$owner/$repo/environments/$environment)
+
+          if [ "$environment_check" -ne 200 ]; then
+            echo "Error: Environment '$environment' does not exist in repository '$repo'. Please create it manually before running this workflow."
+            exit 1
+          fi
+
+          # Apply protection rules to the environment
+          echo "Applying branch protection rules for branch $branch in environment $environment..."
+          curl -X PUT -H "Authorization: Bearer $AUTH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/$owner/$repo/environments/$environment \
             -d '{
               "wait_timer": 30,
               "reviewers": {
                 "users": [],
-                "teams": ["team-slug"]
+                "teams": ["team-slug"]  # Replace with your actual team slug
               },
               "deployment_branch_policy": {
                 "protected_branches": true,
