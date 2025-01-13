@@ -36,26 +36,26 @@ jobs:
 
           # Define GraphQL mutation for branch protection
           graphql_query=$(cat <<EOF
-          {
-            "query": "mutation {
-              createBranchProtectionRule(input: {
-                repositoryId: \\"$repo_id\\",
-                pattern: \\"$branch_pattern\\",
-                requiresApprovingReviews: true,
-                requiredApprovingReviewCount: 2,
-                dismissesStaleReviews: true,
-                requiresCodeOwnerReviews: true,
-                isAdminEnforced: true,
-                allowsForcePushes: false,
-                allowsDeletions: false
-              }) {
-                branchProtectionRule {
-                  id
-                  pattern
-                }
-              }
-            }"
-          }
+{
+  "query": "mutation {
+    createBranchProtectionRule(input: {
+      repositoryId: \"$repo_id\",
+      pattern: \"$branch_pattern\",
+      requiresApprovingReviews: true,
+      requiredApprovingReviewCount: 2,
+      dismissesStaleReviews: true,
+      requiresCodeOwnerReviews: true,
+      isAdminEnforced: true,
+      allowsForcePushes: false,
+      allowsDeletions: false
+    }) {
+      branchProtectionRule {
+        id
+        pattern
+      }
+    }
+  }"
+}
 EOF
 )
 
