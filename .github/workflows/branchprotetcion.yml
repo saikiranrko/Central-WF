@@ -1,4 +1,4 @@
-name: Add Branch Protection Policy
+name: Add Environment-Specific Branch Protection
 
 on:
   workflow_dispatch:
@@ -9,37 +9,40 @@ on:
       branch:
         description: "Branch name to apply protection"
         required: true
+      environment:
+        description: "Environment name to apply protection rules"
+        required: true
 
 jobs:
-  set-branch-protection:
+  set-environment-protection:
     runs-on: ubuntu-latest
     steps:
-      - name: Apply Branch Protection
+      - name: Apply Environment-Specific Branch Protection
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           owner=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f1)
           repo=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f2)
           branch="${{ github.event.inputs.branch }}"
+          environment="${{ github.event.inputs.environment }}"
 
+          # Update environment-specific protection rules
           curl -X PUT -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/$owner/$repo/branches/$branch/protection \
+            https://api.github.com/repos/$owner/$repo/environments/$environment \
             -d '{
-              "required_status_checks": {
-                "strict": true,
-                "contexts": []
+              "wait_timer": 30,
+              "reviewers": {
+                "users": [],
+                "teams": ["team-slug"]
               },
-              "enforce_admins": true,
-              "required_pull_request_reviews": {
-                "dismissal_restrictions": {},
-                "dismiss_stale_reviews": true,
-                "require_code_owner_reviews": true,
-                "required_approving_review_count": 2
+              "deployment_branch_policy": {
+                "protected_branches": true,
+                "custom_branch_policies": false
               },
-              "restrictions": null,
-              "allow_force_pushes": false,
-              "allow_deletions": false
+              "allow_deployment_from": {
+                "branches": ["'"$branch"'"]
+              }
             }'
 
-          echo "Branch protection applied to $branch in repository $repo"
+          echo "Environment-specific protection rules applied to branch $branch in environment $environment"
