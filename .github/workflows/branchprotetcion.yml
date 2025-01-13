@@ -21,6 +21,9 @@ jobs:
   set-environment-protection:
     runs-on: ubuntu-latest
     steps:
+      - name: Install jq (JSON processor)
+        run: sudo apt-get install -y jq
+
       - name: Apply Branch Protection Rules
         env:
           AUTH_TOKEN: ${{ secrets.PAT_TOKEN }}
