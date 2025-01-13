@@ -1,4 +1,4 @@
-name: Add Environment Branch Protection
+name: Configure Environment Deployment Rules
 on:
   workflow_dispatch:
     inputs:
@@ -6,47 +6,104 @@ on:
         description: "Repository name (owner/repo)"
         required: true
       environment:
-        description: "Environment (e.g., prod, staging, dev)"
+        description: "Environment name"
         required: true
-      branch_pattern:
-        description: "Branch pattern (e.g., main, release/*)"
+      deployment_rule:
+        description: "Deployment rule type (no_restriction, protected_branches, selected)"
         required: true
+        default: 'no_restriction'
+      branch_patterns:
+        description: "Branch/tag patterns (comma-separated, required for 'selected' type)"
+        required: false
+        default: ''
 jobs:
-  set-env-branch-protection:
+  configure-environment:
     runs-on: ubuntu-latest
     steps:
-      - name: Apply Environment Branch Protection
+      - name: Configure Environment Deployment Rules
         env:
           AUTH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           owner=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f1)
           repo=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f2)
-          branch_pattern="${{ github.event.inputs.branch_pattern }}"
-          environment="${{ github.event.inputs.environment }}"
+          env_name="${{ github.event.inputs.environment }}"
+          rule_type="${{ github.event.inputs.deployment_rule }}"
+          patterns="${{ github.event.inputs.branch_patterns }}"
           
-          # Fetch repository ID
-          echo "Fetching repository ID for $owner/$repo..."
-          repo_id=$(curl -s -H "Authorization: Bearer $AUTH_TOKEN" \
+          # Get environment ID
+          echo "Fetching environment ID for $env_name..."
+          env_response=$(curl -s \
+            -H "Authorization: Bearer $AUTH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$owner/$repo" | jq -r .node_id)
+            "https://api.github.com/repos/$owner/$repo/environments/$env_name")
           
-          if [ -z "$repo_id" ] || [ "$repo_id" = "null" ]; then
-            echo "Error: Failed to fetch repository ID. Check repository name and token permissions."
+          env_id=$(echo "$env_response" | jq -r '.id')
+          if [ -z "$env_id" ] || [ "$env_id" = "null" ]; then
+            echo "Error: Environment not found"
             exit 1
           fi
           
-          # Execute GraphQL mutation with environment protection
-          echo "Applying environment-specific branch protection rules..."
-          curl -s -X POST \
-            -H "Authorization: Bearer $AUTH_TOKEN" \
-            -H "Content-Type: application/json" \
-            https://api.github.com/graphql \
-            -d "{
-              \"query\": \"mutation(\$repositoryId: ID!, \$pattern: String!) { createBranchProtectionRule(input: { repositoryId: \$repositoryId, pattern: \$pattern, requiresApprovingReviews: true, requiredApprovingReviewCount: 2, dismissesStaleReviews: true, requiresCodeOwnerReviews: true, isAdminEnforced: true, requiresStatusChecks: true, requiresStrictStatusChecks: true, restrictsPushes: true, requiresDeployments: true, requiredDeploymentEnvironments: [\\\"${environment}\\\"], allowsForcePushes: false, allowsDeletions: false }) { branchProtectionRule { id pattern } } }\",
-              \"variables\": {
-                \"repositoryId\": \"$repo_id\",
-                \"pattern\": \"$branch_pattern\"
-              }
-            }" | jq '.'
+          # Prepare deployment rules based on type
+          case "$rule_type" in
+            "no_restriction")
+              deployment_rules='{
+                "deployment_branch_policy": {
+                  "protected_branches": false,
+                  "custom_branch_policies": false
+                }
+              }'
+              ;;
+            
+            "protected_branches")
+              deployment_rules='{
+                "deployment_branch_policy": {
+                  "protected_branches": true,
+                  "custom_branch_policies": false
+                }
+              }'
+              ;;
+            
+            "selected")
+              if [ -z "$patterns" ]; then
+                echo "Error: Branch patterns required for 'selected' type"
+                exit 1
+              fi
+              # Convert comma-separated patterns to array
+              IFS=',' read -ra pattern_array <<< "$patterns"
+              pattern_json="[]"
+              for pattern in "${pattern_array[@]}"; do
+                pattern_json=$(echo "$pattern_json" | jq --arg p "$(echo $pattern | xargs)" '. + [$p]')
+              done
+              deployment_rules='{
+                "deployment_branch_policy": {
+                  "protected_branches": false,
+                  "custom_branch_policies": true
+                },
+                "branch_policies": '"$pattern_json"'
+              }'
+              ;;
+            
+            *)
+              echo "Error: Invalid deployment rule type"
+              exit 1
+              ;;
+          esac
           
-          echo "Environment-specific branch protection rules applied for '$branch_pattern' in $owner/$repo for $environment environment."
+          # Update environment settings
+          echo "Updating environment deployment rules..."
+          response=$(curl -s -X PUT \
+            -H "Authorization: Bearer $AUTH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/$owner/$repo/environments/$env_name" \
+            -d "$deployment_rules")
+          
+          if echo "$response" | jq -e '.message' >/dev/null; then
+            echo "Error updating environment:"
+            echo "$response" | jq '.message'
+            exit 1
+          fi
+          
+          echo "Successfully updated deployment rules for environment '$env_name'"
+          echo "Configuration:"
+          echo "$response" | jq '.'
