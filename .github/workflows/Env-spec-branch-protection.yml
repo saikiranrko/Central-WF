@@ -44,7 +44,11 @@ jobs:
             echo "Error: Environment not found"
             exit 1
           fi
-          
+
+          # Log environment details
+          echo "Environment details:"
+          echo "$env_response" | jq '.'
+
           # Prepare deployment rules based on type
           case "$rule_type" in
             "no_restriction")
@@ -70,6 +74,7 @@ jobs:
                 echo "Error: Branch patterns required for 'selected' type"
                 exit 1
               fi
+              echo "Branch patterns provided: $patterns"
               deployment_rules='{
                 "deployment_branch_policy": {
                   "protected_branches": false,
