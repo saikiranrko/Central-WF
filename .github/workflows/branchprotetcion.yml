@@ -12,18 +12,11 @@ on:
       environment:
         description: "Environment name to apply protection rules"
         required: true
-      reviewers:
-        description: "Comma-separated list of reviewers (optional)"
-        required: false
-        default: ""
 
 jobs:
   set-environment-protection:
     runs-on: ubuntu-latest
     steps:
-      - name: Install jq (JSON processor)
-        run: sudo apt-get install -y jq
-
       - name: Apply Branch Protection Rules
         env:
           AUTH_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -33,7 +26,6 @@ jobs:
           repo=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f2)
           branch="${{ github.event.inputs.branch }}"
           environment="${{ github.event.inputs.environment }}"
-          reviewers="${{ github.event.inputs.reviewers }}"
 
           # Check if the environment exists
           echo "Checking if environment $environment exists..."
@@ -47,14 +39,8 @@ jobs:
           fi
 
           # Prepare JSON payload
-          if [ -n "$reviewers" ]; then
-            reviewers_array=$(echo "$reviewers" | jq -R 'split(",")')
-            json_payload=$(cat <<EOF
+          json_payload=$(cat <<EOF
 {
-  "wait_timer": 30,
-  "reviewers": {
-    "users": $reviewers_array
-  },
   "deployment_branch_policy": {
     "protected_branches": true,
     "custom_branch_policies": false
@@ -62,18 +48,6 @@ jobs:
 }
 EOF
 )
-          else
-            json_payload=$(cat <<EOF
-{
-  "wait_timer": 30,
-  "deployment_branch_policy": {
-    "protected_branches": true,
-    "custom_branch_policies": false
-  }
-}
-EOF
-)
-          fi
 
           # Apply protection rules
           echo "Applying branch protection rules for branch $branch in environment $environment..."
