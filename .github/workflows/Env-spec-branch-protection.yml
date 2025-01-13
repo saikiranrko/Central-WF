@@ -1,4 +1,5 @@
 name: Configure Environment Deployment Rules
+
 on:
   workflow_dispatch:
     inputs:
@@ -16,6 +17,7 @@ on:
         description: "Branch/tag patterns (comma-separated, required for 'selected' type)"
         required: false
         default: ''
+
 jobs:
   configure-environment:
     runs-on: ubuntu-latest
@@ -47,7 +49,6 @@ jobs:
           case "$rule_type" in
             "no_restriction")
               deployment_rules='{
-                "wait_timer": 0,
                 "deployment_branch_policy": {
                   "protected_branches": false,
                   "custom_branch_policies": false
@@ -57,7 +58,6 @@ jobs:
             
             "protected_branches")
               deployment_rules='{
-                "wait_timer": 0,
                 "deployment_branch_policy": {
                   "protected_branches": true,
                   "custom_branch_policies": false
@@ -70,19 +70,11 @@ jobs:
                 echo "Error: Branch patterns required for 'selected' type"
                 exit 1
               fi
-              # Convert comma-separated patterns to array of name rules
-              IFS=',' read -ra pattern_array <<< "$patterns"
-              rules_json="[]"
-              for pattern in "${pattern_array[@]}"; do
-                rules_json=$(echo "$rules_json" | jq --arg p "$(echo $pattern | xargs)" '. + [{"name": $p}]')
-              done
               deployment_rules='{
-                "wait_timer": 0,
                 "deployment_branch_policy": {
                   "protected_branches": false,
                   "custom_branch_policies": true
-                },
-                "branch_policies": '"$rules_json"'
+                }
               }'
               ;;
             
