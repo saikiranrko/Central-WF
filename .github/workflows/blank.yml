@@ -1,80 +1,77 @@
-name: AAdd Branch Protection Rules to Repository (Local Testing)
-
-run-name: "Adding Branch Protection Rules - [ '${{ github.event.inputs.repository }}' | branch '${{ github.event.inputs.branchName }}' ]"
+name: Tag Protection Rules
+run-name: "Adding Tag Protection Rules to ${{ github.event.inputs.repository }}"
 
 on:
   workflow_dispatch:
     inputs:
       repository:
+        description: 'Repository name'
         type: string
         required: true
-        description: 'Target repository for branch protection rules'
-      branchname:
+      tag_pattern:
+        description: 'Tag name pattern (e.g., v*, release/*, prod/*)'
         type: string
         required: true
-        description: 'Branch name, excluding "master", "rel", "Hot", and "main"'
-      required_approving_review_count:
-        type: number
+      environment:
+        description: 'Environment to apply protection (e.g., development, staging, production)'
+        type: string
         required: true
-        default: 2
 
 jobs:
-  CHECK_BRANCH_IF_EXISTS:
-    runs-on: ubuntu-latest # Use Ubuntu for local testing
+  add_tag_protection:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    
     steps:
-      - name: Set Up Environment
+      - name: Check Repository Access
         run: |
-          echo "Setting up environment variables"
-          echo "Repository: ${{ github.event.inputs.repository }}"
-          echo "Branch Name: ${{ github.event.inputs.branchname }}"
-          echo "Approving Review Count: ${{ github.event.inputs.required_approving_review_count }}"
-
-      - name: Check Collaborator Access
-        id: check_admin_access
-        run: |
-          echo "Checking if user has admin access to repository: ${{ github.event.inputs.repository }}"
-          echo "Simulating admin access for local run"
-          # Simulated admin check; replace with actual API call in production
-          ACTOR_ROLE="admin"
-          echo "Role: $ACTOR_ROLE"
-
-          if [[ "$ACTOR_ROLE" != "admin" ]]; then
-            echo "You do not have permission to add branch protection rules."
-            exit 1
-          fi
-
-      - name: Check Branch Existence
-        id: branchname_check
-        run: |
-          echo "Validating branch name: ${{ github.event.inputs.branchname }}"
-          if [[ "${{ github.event.inputs.branchname }}" =~ ^(master|rel|Hot|main)$ ]]; then
-            echo "Branch '${{ github.event.inputs.branchname }}' is excluded."
-            exit 1
-          fi
-
-          echo "Simulating branch existence check for branch: ${{ github.event.inputs.branchname }}"
-          # Simulated branch check; replace with actual API call in production
-          BRANCH_EXISTS=true
-
-          if [[ "$BRANCH_EXISTS" != true ]]; then
-            echo "Branch '${{ github.event.inputs.branchname }}' does not exist in repository '${{ github.event.inputs.repository }}'."
-            exit 1
-          fi
-
-      - name: Add Branch Protection Rules
-        run: |
-          echo "Adding branch protection rules for branch: ${{ github.event.inputs.branchname }}"
-          echo "Simulating branch protection rule application"
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repository }}")
           
-          if [[ ${{ github.event.inputs.required_approving_review_count }} -lt 1 ]]; then
-            echo "Required approving review count must be at least 1."
+          if [ "$HTTP_STATUS" -eq "200" ]; then
+            echo "Repository access verified"
+          else
+            echo "Error: Unable to access repository"
             exit 1
           fi
 
-          echo "Branch protection rules applied successfully with:"
-          echo "- Required Approving Reviews: ${{ github.event.inputs.required_approving_review_count }}"
-          echo "- Admin enforcement enabled"
-          echo "- Force pushes and deletions disabled"
+      - name: Create Environment
+        run: |
+          curl -X PUT \
+            -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repository }}/environments/${{ github.event.inputs.environment }}"
 
-      - name: Complete Workflow
-        run: echo "Branch protection rules have been successfully applied!"
+      - name: Configure Environment Protection Rules
+        run: |
+          curl -X PUT \
+            -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repository }}/environments/${{ github.event.inputs.environment }}" \
+            -d '{
+              "deployment_branch_policy": {
+                "protected_branches": false,
+                "custom_branch_policies": true
+              }
+            }'
+
+      - name: Add Tag Rule to Environment
+        run: |
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repository }}/environments/${{ github.event.inputs.environment }}/deployment_branch_policies" \
+            -d '{
+              "name": "${{ github.event.inputs.tag_pattern }}",
+              "type": "tag"
+            }'
+
+      - name: Verify Rules
+        run: |
+          echo "Checking environment deployment branch policies..."
+          curl -s \
+            -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repository }}/environments/${{ github.event.inputs.environment }}/deployment_branch_policies"
