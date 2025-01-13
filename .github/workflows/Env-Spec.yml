@@ -7,7 +7,7 @@ on:
         description: 'Repository name (e.g., owner/repo)'
         required: true
       branch_or_tag:
-        description: 'Branch or tag to deploy (e.g., main or v1.0.0)'
+        description: 'Exact branch or tag to deploy (e.g., main or v1.0.0)'
         required: true
       environment_name:
         description: 'Environment to which the deployment will be applied (e.g., dev, staging, production)'
@@ -41,7 +41,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: ${{ inputs.repo_name }}
-          ref: ${{ inputs.branch_or_tag }}
+          ref: ${{ inputs.branch_or_tag }} # Ensure it’s an exact branch or tag
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set Up Environment Variables
