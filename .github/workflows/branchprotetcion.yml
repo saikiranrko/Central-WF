@@ -15,6 +15,7 @@ jobs:
       - name: Apply Branch Protection for Pattern
         env:
           AUTH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_DEBUG: true
         run: |
           # Parse inputs
           owner=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f1)
@@ -49,6 +50,7 @@ jobs:
             "https://api.github.com/repos/$owner/$repo")
           
           repo_id=$(echo "$repo_response" | jq -r .node_id)
+          echo "Repository ID: $repo_id"
           
           if [ -z "$repo_id" ] || [ "$repo_id" = "null" ]; then
             echo "Error: Failed to fetch repository ID."
@@ -61,11 +63,8 @@ jobs:
             exit 1
           fi
           
-          echo "Successfully found repository ID: $repo_id"
-          
           # Create GraphQL mutation
-          read -r -d '' QUERY << 'GRAPHQL'
-          mutation($repositoryId: ID!, $pattern: String!) {
+          QUERY='mutation($repositoryId: ID!, $pattern: String!) {
             createBranchProtectionRule(input: {
               repositoryId: $repositoryId,
               pattern: $pattern,
@@ -82,8 +81,7 @@ jobs:
                 pattern
               }
             }
-          }
-          GRAPHQL
+          }'
           
           # Create request body
           json_body=$(jq -n \
@@ -98,20 +96,34 @@ jobs:
               }
             }')
           
+          # Debug request body
+          echo "GraphQL Request Body:"
+          echo "$json_body" | jq '.'
+          
           # Execute GraphQL mutation with error handling
           echo "Applying branch protection rules for pattern '$branch_pattern'..."
-          graphql_response=$(curl -s -X POST \
+          graphql_response=$(curl -v -X POST \
             -H "Authorization: Bearer $AUTH_TOKEN" \
             -H "Content-Type: application/json" \
+            -H "Accept: application/vnd.github+json" \
             https://api.github.com/graphql \
-            -d "$json_body")
+            -d "$json_body" 2>&1)
           
-          if echo "$graphql_response" | jq -e '.errors' >/dev/null; then
+          # Print full response for debugging
+          echo "Full GraphQL Response:"
+          echo "$graphql_response"
+          
+          # Check for errors in a more robust way
+          if echo "$graphql_response" | grep -q "errors"; then
             echo "Error: GraphQL mutation failed:"
-            echo "$graphql_response" | jq '.errors'
+            echo "$graphql_response" | jq '.errors[]?.message' 2>/dev/null
             exit 1
+          elif ! echo "$graphql_response" | grep -q "branchProtectionRule"; then
+            echo "Error: Unexpected response format:"
+            echo "$graphql_response"
+            exit 1
+          else
+            echo "Success! Branch protection rules applied for branch pattern '$branch_pattern' in repo $owner/$repo."
+            echo "Response:"
+            echo "$graphql_response" | jq '.' 2>/dev/null || echo "$graphql_response"
           fi
-          
-          echo "Success! Branch protection rules applied for branch pattern '$branch_pattern' in repo $owner/$repo."
-          echo "Response:"
-          echo "$graphql_response" | jq '.'
