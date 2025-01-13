@@ -1,4 +1,4 @@
-name: Add Branch Protection Rules
+name: Add Classic Branch Protection
 
 on:
   workflow_dispatch:
@@ -9,15 +9,12 @@ on:
       branch:
         description: "Branch name to apply protection"
         required: true
-      environment:
-        description: "Environment name to apply protection rules"
-        required: true
 
 jobs:
-  set-environment-protection:
+  set-branch-protection:
     runs-on: ubuntu-latest
     steps:
-      - name: Apply Branch Protection Rules
+      - name: Apply Classic Branch Protection
         env:
           AUTH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
@@ -25,24 +22,27 @@ jobs:
           owner=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f1)
           repo=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f2)
           branch="${{ github.event.inputs.branch }}"
-          environment="${{ github.event.inputs.environment }}"
 
-          # Check if the environment exists
-          echo "Checking if environment $environment exists..."
-          environment_check=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $AUTH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/$owner/$repo/environments/$environment)
-
-          if [ "$environment_check" -ne 200 ]; then
-            echo "Error: Environment '$environment' does not exist in repository '$repo'. Please create it manually before running this workflow."
-            exit 1
-          fi
-
-          # Apply default protection rules
-          echo "Applying default branch protection rules for branch $branch in environment $environment..."
+          # Define branch protection rules
+          echo "Creating branch protection rules for branch $branch in repo $owner/$repo..."
 
           curl -X PUT -H "Authorization: Bearer $AUTH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/$owner/$repo/environments/$environment
+            https://api.github.com/repos/$owner/$repo/branches/$branch/protection \
+            -d '{
+              "required_status_checks": {
+                "strict": true,
+                "contexts": []
+              },
+              "enforce_admins": true,
+              "required_pull_request_reviews": {
+                "dismiss_stale_reviews": true,
+                "require_code_owner_reviews": true,
+                "required_approving_review_count": 2
+              },
+              "restrictions": null,
+              "allow_force_pushes": false,
+              "allow_deletions": false
+            }'
 
-          echo "Default branch protection rules applied to branch $branch in environment $environment"
+          echo "Branch protection rules applied to branch $branch in repo $owner/$repo."
