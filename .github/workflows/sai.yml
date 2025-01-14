@@ -2,6 +2,9 @@ name: Add Tag Protection Rule
 on:
   workflow_dispatch:
     inputs:
+      repository:
+        description: "Repository name (e.g., owner/repo)"
+        required: true
       environment_name:
         description: "Environment name"
         required: true
@@ -17,20 +20,21 @@ jobs:
     environment: ${{ github.event.inputs.environment_name }}
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      
       - name: Configure environment deployment rules
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.PAT_TOKEN }}
           script: |
+            const [owner, repo] = '${{ github.event.inputs.repository }}'.split('/');
             const environment = '${{ github.event.inputs.environment_name }}';
             const tagPattern = '${{ github.event.inputs.tag_pattern }}';
             
+            console.log(`Configuring environment ${environment} for ${owner}/${repo}`);
+            
+            // Create or update environment with deployment protection
             await github.rest.repos.createOrUpdateEnvironment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
+              owner: owner,
+              repo: repo,
               environment_name: environment,
               deployment_branch_policy: {
                 protected_branches: false,
@@ -38,11 +42,15 @@ jobs:
               }
             });
             
+            console.log('Environment configured successfully');
+            
             // Add deployment rule for tags
             await github.rest.repos.createDeploymentBranchPolicy({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
+              owner: owner,
+              repo: repo,
               environment_name: environment,
               name: tagPattern,
               ref_type: "tag"
             });
+            
+            console.log(`Tag protection rule added for pattern: ${tagPattern}`);
