@@ -44,13 +44,12 @@ jobs:
             
             console.log('Environment configured successfully');
             
-            // Add deployment rule for tags
+            // Add deployment branch policy for tags
             await github.rest.repos.createDeploymentBranchPolicy({
               owner: owner,
               repo: repo,
               environment_name: environment,
-              name: tagPattern,
-              ref_type: "tag"
+              name: tagPattern
             });
             
             console.log(`Tag protection rule added for pattern: ${tagPattern}`);
