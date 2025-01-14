@@ -1,4 +1,4 @@
-name: Add Tag Deployment RulE
+name: Add Tag deployment Rule
 
 on:
   workflow_dispatch:
@@ -11,46 +11,68 @@ on:
         description: 'Repository name (format: owner/repo)'
         required: true
         type: string
+      tag_pattern:
+        description: 'Tag pattern (e.g., "v*" for tags starting with v, "*" for all tags)'
+        required: true
+        type: string
+        default: '*'
 
 jobs:
   add-deployment-rule:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+      environments: write
+    
     steps:
-      - name: Get current deployment rules
-        id: get-rules
+      - name: Get current environment settings
+        id: get-env
         run: |
           RESPONSE=$(curl -L \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}/deployment-protection-rules")
-          echo "current_rules=$RESPONSE" >> $GITHUB_OUTPUT
+            "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}")
+          echo "current_settings=$RESPONSE" >> $GITHUB_OUTPUT
 
       - name: Update deployment rules
         run: |
-          # Get existing rules and add new tag rule
-          CURRENT_RULES='${{ steps.get-rules.outputs.current_rules }}'
+          # Get existing settings
+          CURRENT_SETTINGS='${{ steps.get-env.outputs.current_settings }}'
           
-          # If no existing rules, create initial structure
-          if [ "$CURRENT_RULES" == "" ] || [ "$CURRENT_RULES" == "null" ]; then
-            NEW_RULES='{
+          # If no existing settings or error, create initial structure
+          if [ "$CURRENT_SETTINGS" == "" ] || [ "$CURRENT_SETTINGS" == "null" ] || [[ "$CURRENT_SETTINGS" == *"Not Found"* ]]; then
+            NEW_SETTINGS='{
               "deployment_branch_policy": {
                 "protected_branches": false,
                 "custom_branch_policies": true
-              }
+              },
+              "custom_deployment_rules": [
+                {
+                  "ref_type": "tag",
+                  "pattern": "${{ inputs.tag_pattern }}"
+                }
+              ]
             }'
           else
-            NEW_RULES="$CURRENT_RULES"
+            # Add new tag rule to existing settings
+            NEW_SETTINGS=$(echo $CURRENT_SETTINGS | jq --arg pattern "${{ inputs.tag_pattern }}" '
+              .deployment_branch_policy.custom_branch_policies = true |
+              if has("custom_deployment_rules") then
+                .custom_deployment_rules += [{"ref_type": "tag", "pattern": $pattern}]
+              else
+                . + {"custom_deployment_rules": [{"ref_type": "tag", "pattern": $pattern}]}
+              end
+            ')
           fi
           
-          # Create payload with updated rules including tag reference
-          PAYLOAD=$(echo $NEW_RULES | jq '.deployment_branch_policy.custom_branch_policies = true' | jq '.custom_deployment_rules += [{"ref_type": "tag", "pattern": "*"}]')
-          
-          # Update the environment with new rules
+          # Update the environment with new settings
           curl -L \
             -X PUT \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
             "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}" \
-            -d "$PAYLOAD"
+            -d "$NEW_SETTINGS"
