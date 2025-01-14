@@ -1,4 +1,4 @@
-name: Add Tag Protection Rule
+name: Add Tag Protection Ruleset
 on:
   workflow_dispatch:
     inputs:
@@ -10,10 +10,10 @@ on:
         required: true
 
 jobs:
-  set-tag-protection:
+  set-tag-ruleset:
     runs-on: ubuntu-latest
     steps:
-      - name: Apply Tag Protection Rule
+      - name: Apply Tag Protection Ruleset
         env:
           AUTH_TOKEN: ${{ secrets.PAT_TOKEN }}
           GITHUB_DEBUG: true
@@ -28,21 +28,51 @@ jobs:
           echo "Repository: $repo"
           echo "Tag Pattern: $tag_pattern"
           
-          # Create tag protection rule
+          # Create ruleset for tag protection
           response=$(curl -X POST \
             -H "Authorization: Bearer $AUTH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/$owner/$repo/tags/protection" \
-            -d "{\"pattern\":\"$tag_pattern\"}")
+            "https://api.github.com/repos/$owner/$repo/rulesets" \
+            -d '{
+              "name": "Tag Protection Ruleset",
+              "target": "tag",
+              "enforcement": "active",
+              "conditions": {
+                "ref_name": {
+                  "include": ["'"$tag_pattern"'"],
+                  "exclude": []
+                }
+              },
+              "rules": [
+                {
+                  "type": "creation",
+                  "parameters": {
+                    "update_allows_fetch": false,
+                    "required_signatures": true
+                  }
+                },
+                {
+                  "type": "update",
+                  "parameters": {
+                    "update_allows_fetch": false,
+                    "required_signatures": true
+                  }
+                },
+                {
+                  "type": "deletion",
+                  "parameters": {}
+                }
+              ],
+              "bypass_actors": []
+            }')
           
           # Check response
           if echo "$response" | jq -e '.id' > /dev/null; then
-            echo "Success! Tag protection rule created:"
+            echo "Success! Tag protection ruleset created:"
             echo "$response" | jq '.'
           else
-            echo "Error creating tag protection rule:"
+            echo "Error creating tag protection ruleset:"
             echo "$response" | jq '.'
             exit 1
           fi
-
