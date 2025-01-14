@@ -1,58 +1,48 @@
-name: Add Tag Protection Ruleset
-
+name: Add Tag Protection Rule
 on:
   workflow_dispatch:
     inputs:
-      repository:
-        description: 'Repository name (e.g., owner/repo)'
+      repo:
+        description: "Repository name (owner/repo)"
         required: true
-        type: string
       tag_pattern:
-        description: 'Tag pattern to protect (e.g., v*)'
+        description: "Tag pattern to protect (e.g., v*)"
         required: true
-        type: string
 
 jobs:
-  add_tag_protection_ruleset:
+  set-tag-protection:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      actions: write
-
     steps:
-      - name: Add Tag Protection Ruleset
+      - name: Apply Tag Protection Rule
+        env:
+          AUTH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_DEBUG: true
         run: |
-          echo "Repository: ${{ github.event.inputs.repository }}"
-          echo "Tag Pattern: ${{ github.event.inputs.tag_pattern }}"
+          # Parse inputs
+          owner=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f1)
+          repo=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f2)
+          tag_pattern="${{ github.event.inputs.tag_pattern }}"
           
-          # Validate inputs
-          if [[ -z "${{ github.event.inputs.repository }}" || -z "${{ github.event.inputs.tag_pattern }}" ]]; then
-            echo "Required inputs are missing!"
+          # Debug information
+          echo "Owner: $owner"
+          echo "Repository: $repo"
+          echo "Tag Pattern: $tag_pattern"
+          
+          # Create tag protection rule
+          response=$(curl -X POST \
+            -H "Authorization: Bearer $AUTH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$owner/$repo/tags/protection" \
+            -d "{\"pattern\":\"$tag_pattern\"}")
+          
+          # Check response
+          if echo "$response" | jq -e '.id' > /dev/null; then
+            echo "Success! Tag protection rule created:"
+            echo "$response" | jq '.'
+          else
+            echo "Error creating tag protection rule:"
+            echo "$response" | jq '.'
             exit 1
           fi
 
-          # Create a repository ruleset for tag protection
-          curl -L \
-            -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.PAT_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.event.inputs.repository }}/rulesets" \
-            -d "{
-              \"name\": \"Protect Tags - ${{ github.event.inputs.tag_pattern }}\",
-              \"target\": \"tag\",
-              \"rules\": [
-                {
-                  \"type\": \"pattern\",
-                  \"pattern\": \"${{ github.event.inputs.tag_pattern }}\",
-                  \"enforcement\": \"strict\"
-                }
-              ]
-            }"
-
-      - name: Verify Tag Rulesets
-        run: |
-          echo "Fetching repository rulesets..."
-          curl -L \
-            -H "Authorization: Bearer ${{ secrets.PAT_TOKEN }}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.event.inputs.repository }}/rulesets"
