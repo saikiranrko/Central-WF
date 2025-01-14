@@ -31,55 +31,31 @@ jobs:
             
             console.log(`Configuring environment ${environment} for ${owner}/${repo}`);
             
-            // First, get the repository ID
-            const repoData = await github.rest.repos.get({
-              owner: owner,
-              repo: repo
-            });
-            
-            // Create or update environment with deployment protection rules
-            await github.rest.repos.createOrUpdateEnvironment({
-              owner: owner,
-              repo: repo,
-              environment_name: environment,
-              deployment_branch_policy: {
-                protected_branches: false,
-                custom_branch_policies: true
-              }
-            });
-            
-            console.log('Environment configured successfully');
-            
-            // Create deployment protection rule using the repository ID
-            const query = `
-              mutation createRule($input: CreateEnvironmentRulesInput!) {
-                createEnvironmentRules(input: $input) {
-                  rules {
-                    id
-                    pattern
-                    type
-                  }
-                }
-              }
-            `;
-            
             try {
-              await github.graphql(query, {
-                input: {
-                  repositoryId: repoData.data.node_id,
-                  environmentName: environment,
-                  rules: [
-                    {
-                      pattern: tagPattern,
-                      type: "TAG"
-                    }
-                  ]
+              // Create or update environment with deployment protection rules
+              const response = await github.rest.repos.createOrUpdateEnvironment({
+                owner: owner,
+                repo: repo,
+                environment_name: environment,
+                deployment_branch_policy: {
+                  protected_branches: false,
+                  custom_branch_policies: true
                 }
+              });
+              
+              console.log('Environment configured successfully');
+              
+              // Add deployment branch policy for tags
+              await github.rest.repos.createDeploymentBranchPolicy({
+                owner: owner,
+                repo: repo,
+                environment_name: environment,
+                name: tagPattern
               });
               
               console.log(`Tag deployment rule added for pattern: ${tagPattern}`);
             } catch (error) {
-              if (error.message.includes('already exists')) {
+              if (error.status === 422 && error.message.includes('already exists')) {
                 console.log(`Tag pattern ${tagPattern} already exists for this environment`);
               } else {
                 console.error('Error details:', error);
