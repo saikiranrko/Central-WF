@@ -1,0 +1,56 @@
+name: Add Tag Deployment RulE
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment_name:
+        description: 'Environment name to add the tag rule to'
+        required: true
+        type: string
+      repository:
+        description: 'Repository name (format: owner/repo)'
+        required: true
+        type: string
+
+jobs:
+  add-deployment-rule:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get current deployment rules
+        id: get-rules
+        run: |
+          RESPONSE=$(curl -L \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}/deployment-protection-rules")
+          echo "current_rules=$RESPONSE" >> $GITHUB_OUTPUT
+
+      - name: Update deployment rules
+        run: |
+          # Get existing rules and add new tag rule
+          CURRENT_RULES='${{ steps.get-rules.outputs.current_rules }}'
+          
+          # If no existing rules, create initial structure
+          if [ "$CURRENT_RULES" == "" ] || [ "$CURRENT_RULES" == "null" ]; then
+            NEW_RULES='{
+              "deployment_branch_policy": {
+                "protected_branches": false,
+                "custom_branch_policies": true
+              }
+            }'
+          else
+            NEW_RULES="$CURRENT_RULES"
+          fi
+          
+          # Create payload with updated rules including tag reference
+          PAYLOAD=$(echo $NEW_RULES | jq '.deployment_branch_policy.custom_branch_policies = true' | jq '.custom_deployment_rules += [{"ref_type": "tag", "pattern": "*"}]')
+          
+          # Update the environment with new rules
+          curl -L \
+            -X PUT \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}" \
+            -d "$PAYLOAD"
