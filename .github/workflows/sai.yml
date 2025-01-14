@@ -18,7 +18,7 @@ jobs:
   configure-environment:
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment_name }}
-    
+
     steps:
       - name: Configure environment deployment rules
         uses: actions/github-script@v7
@@ -28,9 +28,9 @@ jobs:
             const [owner, repo] = '${{ github.event.inputs.repository }}'.split('/');
             const environment = '${{ github.event.inputs.environment_name }}';
             const tagPattern = '${{ github.event.inputs.tag_pattern }}';
-            
+
             console.log(`Configuring environment ${environment} for ${owner}/${repo}`);
-            
+
             try {
               // Create or update environment with deployment protection rules
               const response = await github.rest.repos.createOrUpdateEnvironment({
@@ -42,17 +42,18 @@ jobs:
                   custom_branch_policies: true
                 }
               });
-              
+
               console.log('Environment configured successfully');
-              
+
               // Add deployment branch policy for tags
               await github.rest.repos.createDeploymentBranchPolicy({
                 owner: owner,
                 repo: repo,
                 environment_name: environment,
-                name: tagPattern
+                name: tagPattern,
+                reftype: 'tag' // Ensure the policy is applied to tags
               });
-              
+
               console.log(`Tag deployment rule added for pattern: ${tagPattern}`);
             } catch (error) {
               if (error.status === 422 && error.message.includes('already exists')) {
