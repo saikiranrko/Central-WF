@@ -1,0 +1,16 @@
+name: ⚙️ deployment
+
+# Controls when the workflow will run
+on:
+  push:
+    tags:
+      - 'release_*'
+
+jobs:
+  deployment:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Run a one-line script
+        run: echo 'deployment to production'
