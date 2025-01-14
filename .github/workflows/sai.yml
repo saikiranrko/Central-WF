@@ -31,7 +31,7 @@ jobs:
             
             console.log(`Configuring environment ${environment} for ${owner}/${repo}`);
             
-            // First, create or update the environment with deployment protection
+            // Create or update environment with deployment protection rules
             await github.rest.repos.createOrUpdateEnvironment({
               owner: owner,
               repo: repo,
@@ -44,35 +44,12 @@ jobs:
             
             console.log('Environment configured successfully');
             
-            // Create deployment protection rule for tags using GraphQL
-            const query = `
-              mutation($repositoryId: ID!, $environmentName: String!, $pattern: String!) {
-                createDeploymentProtectionRule(input: {
-                  repositoryId: $repositoryId,
-                  environmentName: $environmentName,
-                  pattern: $pattern
-                }) {
-                  deploymentProtectionRule {
-                    id
-                    pattern
-                  }
-                }
-              }
-            `;
-            
-            // Get repository ID
-            const repoData = await github.rest.repos.get({
+            // Add deployment branch policy for tags
+            await github.rest.repos.createDeploymentBranchPolicy({
               owner: owner,
-              repo: repo
+              repo: repo,
+              environment_name: environment,
+              name: tagPattern
             });
             
-            const variables = {
-              repositoryId: repoData.data.node_id,
-              environmentName: environment,
-              pattern: tagPattern
-            };
-            
-            // Create the deployment protection rule
-            await github.graphql(query, variables);
-            
-            console.log(`Tag deployment rule added for pattern: ${tagPattern}`);
+            console.log(`Deployment rule added for pattern: ${tagPattern}`);
