@@ -1,78 +1,48 @@
-name: Add Tag Protection Ruleset
+name: Add Tag Protection Rule
 on:
   workflow_dispatch:
     inputs:
-      repo:
-        description: "Repository name (owner/repo)"
+      environment_name:
+        description: "Environment name"
         required: true
+        default: "production"
       tag_pattern:
-        description: "Tag pattern to protect (e.g., v*)"
+        description: "Tag pattern (e.g., v*)"
         required: true
+        default: "v*"
 
 jobs:
-  set-tag-ruleset:
+  configure-environment:
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment_name }}
+    
     steps:
-      - name: Apply Tag Protection Ruleset
-        env:
-          AUTH_TOKEN: ${{ secrets.PAT_TOKEN }}
-          GITHUB_DEBUG: true
-        run: |
-          # Parse inputs
-          owner=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f1)
-          repo=$(echo "${{ github.event.inputs.repo }}" | cut -d'/' -f2)
-          tag_pattern="${{ github.event.inputs.tag_pattern }}"
-          
-          # Debug information
-          echo "Owner: $owner"
-          echo "Repository: $repo"
-          echo "Tag Pattern: $tag_pattern"
-          
-          # Create ruleset for tag protection
-          response=$(curl -X POST \
-            -H "Authorization: Bearer $AUTH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/$owner/$repo/rulesets" \
-            -d '{
-              "name": "Tag Protection Ruleset",
-              "target": "tag",
-              "enforcement": "active",
-              "conditions": {
-                "ref_name": {
-                  "include": ["'"$tag_pattern"'"],
-                  "exclude": []
-                }
-              },
-              "rules": [
-                {
-                  "type": "creation",
-                  "parameters": {
-                    "update_allows_fetch": false,
-                    "required_signatures": true
-                  }
-                },
-                {
-                  "type": "update",
-                  "parameters": {
-                    "update_allows_fetch": false,
-                    "required_signatures": true
-                  }
-                },
-                {
-                  "type": "deletion",
-                  "parameters": {}
-                }
-              ],
-              "bypass_actors": []
-            }')
-          
-          # Check response
-          if echo "$response" | jq -e '.id' > /dev/null; then
-            echo "Success! Tag protection ruleset created:"
-            echo "$response" | jq '.'
-          else
-            echo "Error creating tag protection ruleset:"
-            echo "$response" | jq '.'
-            exit 1
-          fi
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Configure environment deployment rules
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const environment = '${{ github.event.inputs.environment_name }}';
+            const tagPattern = '${{ github.event.inputs.tag_pattern }}';
+            
+            await github.rest.repos.createOrUpdateEnvironment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              environment_name: environment,
+              deployment_branch_policy: {
+                protected_branches: false,
+                custom_branch_policies: true
+              }
+            });
+            
+            // Add deployment rule for tags
+            await github.rest.repos.createDeploymentBranchPolicy({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              environment_name: environment,
+              name: tagPattern,
+              ref_type: "tag"
+            });
