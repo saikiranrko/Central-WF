@@ -52,12 +52,8 @@ jobs:
             
             // Create deployment protection rule using the repository ID
             const query = `
-              mutation($repositoryId: ID!, $environmentName: String!, $rules: [{pattern: String!, type: REFS}]!) {
-                createEnvironmentRules(input: {
-                  repositoryId: $repositoryId
-                  environmentName: $environmentName
-                  rules: $rules
-                }) {
+              mutation createRule($input: CreateEnvironmentRulesInput!) {
+                createEnvironmentRules(input: $input) {
                   rules {
                     id
                     pattern
@@ -69,12 +65,16 @@ jobs:
             
             try {
               await github.graphql(query, {
-                repositoryId: repoData.data.node_id,
-                environmentName: environment,
-                rules: [{
-                  pattern: tagPattern,
-                  type: "REFS"
-                }]
+                input: {
+                  repositoryId: repoData.data.node_id,
+                  environmentName: environment,
+                  rules: [
+                    {
+                      pattern: tagPattern,
+                      type: "TAG"
+                    }
+                  ]
+                }
               });
               
               console.log(`Tag deployment rule added for pattern: ${tagPattern}`);
@@ -82,6 +82,7 @@ jobs:
               if (error.message.includes('already exists')) {
                 console.log(`Tag pattern ${tagPattern} already exists for this environment`);
               } else {
+                console.error('Error details:', error);
                 throw error;
               }
             }
