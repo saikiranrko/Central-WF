@@ -51,7 +51,7 @@ jobs:
                 repo: repo,
                 environment_name: environment,
                 name: tagPattern,
-                reftype: 'tag' // Ensure the policy is applied to tags
+                reftype: 'tag' // Explicitly ensure this is applied to tags
               });
 
               console.log(`Tag deployment rule added for pattern: ${tagPattern}`);
