@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: "The target environment (e.g., production, staging)"
+        description: "The target environment (e.g., Dev, Production)"
         required: true
       repository:
         description: "The repository (owner/repo format)"
         required: true
       tag:
-        description: "The tag to be added as a rule"
+        description: "The tag to be added as a rule (e.g., v**)"
         required: true
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout the repository (if needed)
+      # Step 1: Checkout the repository (optional)
       - name: Checkout repository
         uses: actions/checkout@v3
 
@@ -39,23 +39,25 @@ jobs:
 
           # Step 2.1: Get the current environment settings
           ENV_URL="https://api.github.com/repos/$OWNER/$REPO/environments/$ENVIRONMENT"
+          echo "Fetching environment settings from: $ENV_URL"
+          
           ENV_RESPONSE=$(curl -s -H "Authorization: Bearer $TOKEN" \
                                   -H "Accept: application/vnd.github+json" \
                                   $ENV_URL)
+          echo "Environment Response: $ENV_RESPONSE"
+
           if [ -z "$ENV_RESPONSE" ] || [[ $ENV_RESPONSE == *"Not Found"* ]]; then
-            echo "Error: Environment $ENVIRONMENT not found in $REPOSITORY."
+            echo "Error: Environment '$ENVIRONMENT' not found in repository '$REPOSITORY'."
             exit 1
           fi
 
           # Step 2.2: Parse the protection rules JSON
-          PROTECTION_RULES=$(echo $ENV_RESPONSE | jq '.protection_rules')
-          if [ -z "$PROTECTION_RULES" ]; then
-            echo "Warning: No existing protection rules found. Initializing..."
-            PROTECTION_RULES="[]"
-          fi
+          PROTECTION_RULES=$(echo $ENV_RESPONSE | jq '.protection_rules // []')
+          echo "Current Protection Rules: $PROTECTION_RULES"
 
           # Step 2.3: Add the new tag rule
           UPDATED_RULES=$(echo $PROTECTION_RULES | jq --arg TAG "$TAG" '. + [{"type": "tag", "pattern": $TAG}]')
+          echo "Updated Protection Rules Payload: $UPDATED_RULES"
 
           # Step 2.4: Update the environment settings
           UPDATE_RESPONSE=$(curl -s -X PATCH \
@@ -64,10 +66,11 @@ jobs:
             -H "Content-Type: application/json" \
             -d "{\"protection_rules\": $UPDATED_RULES}" \
             $ENV_URL)
+          echo "Update Response: $UPDATE_RESPONSE"
 
           # Step 2.5: Confirm the update was successful
           if [[ $UPDATE_RESPONSE == *"protection_rules"* ]]; then
-            echo "Successfully added the tag rule to environment $ENVIRONMENT in $REPOSITORY."
+            echo "Successfully added the tag rule '$TAG' to environment '$ENVIRONMENT' in repository '$REPOSITORY'."
           else
             echo "Failed to update environment. Response: $UPDATE_RESPONSE"
             exit 1
