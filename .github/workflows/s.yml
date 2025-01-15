@@ -1,0 +1,156 @@
+name: Add Tag Deployment Rule
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment_name:
+        description: 'Environment name to add the tag rule to'
+        required: true
+        type: string
+      repository:
+        description: 'Repository name (format: owner/repo)'
+        required: true
+        type: string
+      tag_pattern:
+        description: 'Tag pattern (e.g., "v*" for tags starting with v, "*" for all tags)'
+        required: true
+        type: string
+        default: '*'
+
+jobs:
+  add-deployment-rule:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    
+    steps:
+      - name: Check repository existence
+        id: check-repo
+        run: |
+          HTTP_STATUS=$(curl -L \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -o /dev/null -w "%{http_code}" \
+            "https://api.github.com/repos/${{ inputs.repository }}")
+          
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::error::Repository not found or no access. Status code: $HTTP_STATUS"
+            exit 1
+          fi
+          echo "Repository check passed"
+
+      - name: Check environment existence
+        id: check-env
+        run: |
+          RESPONSE_FILE=$(mktemp)
+          HTTP_STATUS=$(curl -L \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -o "$RESPONSE_FILE" -w "%{http_code}" \
+            "https://api.github.com/repos/${{ inputs.repository }}/environments")
+          
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::error::Failed to fetch environments. Status code: $HTTP_STATUS"
+            cat "$RESPONSE_FILE"
+            rm "$RESPONSE_FILE"
+            exit 1
+          fi
+          
+          ENV_EXISTS=$(cat "$RESPONSE_FILE" | jq -r --arg env "${{ inputs.environment_name }}" '.environments[] | select(.name == $env) | .name')
+          rm "$RESPONSE_FILE"
+          
+          if [ -z "$ENV_EXISTS" ]; then
+            echo "Environment does not exist. Creating it..."
+            CREATE_RESPONSE=$(curl -L -X PUT \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -H "Content-Type: application/json" \
+              "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}" \
+              -d '{"wait_timer":0}')
+            echo "Environment created"
+          else
+            echo "Environment exists"
+          fi
+
+      - name: Get current deployment rules
+        id: get-rules
+        run: |
+          RESPONSE_FILE=$(mktemp)
+          HTTP_STATUS=$(curl -L \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -o "$RESPONSE_FILE" -w "%{http_code}" \
+            "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}/deployment-branch-policies")
+          
+          if [ "$HTTP_STATUS" = "404" ]; then
+            echo "No existing deployment rules"
+            echo "rules_exist=false" >> $GITHUB_OUTPUT
+          elif [ "$HTTP_STATUS" = "200" ]; then
+            echo "rules_exist=true" >> $GITHUB_OUTPUT
+            ESCAPED_CONTENT=$(cat "$RESPONSE_FILE" | jq -c '.' | sed 's/"/\\"/g')
+            echo "current_rules=$ESCAPED_CONTENT" >> $GITHUB_OUTPUT
+          else
+            echo "::error::Failed to fetch deployment rules. Status code: $HTTP_STATUS"
+            cat "$RESPONSE_FILE"
+            rm "$RESPONSE_FILE"
+            exit 1
+          fi
+          rm "$RESPONSE_FILE"
+
+      - name: Update deployment rules
+        run: |
+          SETTINGS_FILE=$(mktemp)
+          
+          # Prepare the new rules
+          if [ "${{ steps.get-rules.outputs.rules_exist }}" = "true" ]; then
+            CURRENT_RULES='${{ steps.get-rules.outputs.current_rules }}'
+            echo "$CURRENT_RULES" | jq --arg pattern "${{ inputs.tag_pattern }}" '
+              .custom_branch_policies = true |
+              if has("custom_deployment_rules") then
+                if (.custom_deployment_rules | map(select(.ref_type == "tag")) | length) > 0 then
+                  .
+                else
+                  .custom_deployment_rules += [{"ref_type": "tag", "pattern": $pattern}]
+                end
+              else
+                . + {"custom_deployment_rules": [{"ref_type": "tag", "pattern": $pattern}]}
+              end
+            ' > "$SETTINGS_FILE"
+          else
+            echo '{
+              "custom_branch_policies": true,
+              "custom_deployment_rules": [
+                {
+                  "ref_type": "tag",
+                  "pattern": "${{ inputs.tag_pattern }}"
+                }
+              ]
+            }' > "$SETTINGS_FILE"
+          fi
+          
+          echo "New deployment rules:"
+          cat "$SETTINGS_FILE"
+          
+          # Update deployment branch policies
+          HTTP_STATUS=$(curl -L -X PUT \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            -o /dev/null -w "%{http_code}" \
+            "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}/deployment-branch-policies" \
+            -d @"$SETTINGS_FILE")
+          
+          rm "$SETTINGS_FILE"
+          
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::error::Failed to update deployment rules. Status code: $HTTP_STATUS"
+            exit 1
+          fi
+          
+          echo "Successfully updated deployment rules"
