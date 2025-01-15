@@ -10,7 +10,7 @@ on:
         description: 'Repository name (format: owner/repo)'
         required: true
       tag_pattern:
-        description: 'Tag pattern (e.g., refs/tags/v*, refs/tags/release-*)'
+        description: 'Tag pattern'
         required: true
 
 jobs:
@@ -21,40 +21,32 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
-          echo "Starting deployment rule update for environment: ${{ github.event.inputs.environment_name }}"
+          echo "Starting deployment rule update for environment: Dev"
           
-          # Get current deployment branch rules
-          echo "Fetching current deployment rules..."
-          RULES=$(gh api \
-            repos/${{ github.event.inputs.repository }}/environments/${{ github.event.inputs.environment_name }}/deployment-branch-policies \
-            --jq '.branch_policies')
+          # First, create the environment if it doesn't exist
+          echo "Creating/Verifying environment..."
+          gh api \
+            --method PUT \
+            repos/saikiranrko/sbc/environments/Dev \
+            --silent || true
           
-          echo "Current rules: $RULES"
-          
-          # Create new tag rule
-          TAG_RULE=$(jq -n --arg pattern "${{ github.event.inputs.tag_pattern }}" '{
-            "name": $pattern,
-            "type": "tag"
+          # Create initial deployment branch policy if none exists
+          TAG_RULE=$(jq -n --arg pattern "refs/tags/release-*" '{
+            "branch_policies": [{
+              "name": $pattern,
+              "type": "tag"
+            }]
           }')
           
-          echo "New tag rule: $TAG_RULE"
+          echo "Setting deployment rules..."
+          echo "$TAG_RULE"
           
-          # Combine existing rules with new tag rule
-          UPDATED_RULES=$(echo "$RULES" | jq --argjson new_rule "$TAG_RULE" '. + [$new_rule]')
-          
-          echo "Updated rules: $UPDATED_RULES"
-          
-          # Create the complete payload
-          PAYLOAD=$(jq -n --argjson rules "$UPDATED_RULES" '{
-            "branch_policies": $rules
-          }')
-          
-          # Update environment deployment rules using the correct API endpoint
+          # Update environment deployment rules
           RESPONSE=$(gh api \
             --method PUT \
-            "repos/${{ github.event.inputs.repository }}/environments/${{ github.event.inputs.environment_name }}/deployment-branch-policies" \
+            repos/saikiranrko/sbc/environments/Dev/deployment-branch-policies \
             -H "Accept: application/vnd.github.v3+json" \
-            --input - <<< "$PAYLOAD")
+            --input - <<< "$TAG_RULE")
           
           if [ $? -eq 0 ]; then
             echo "Successfully updated deployment rules"
