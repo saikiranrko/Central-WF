@@ -1,83 +1,43 @@
-name: Add Deployment Tag Rule
+name: Add Tag Deployment Rule
 
 on:
   workflow_dispatch:
     inputs:
       environment_name:
-        description: 'Environment name to modify'
+        description: 'Environment name'
         required: true
-        type: string
       repository:
         description: 'Repository name (format: owner/repo)'
         required: true
-        type: string
-      tag_pattern:
-        description: 'Tag pattern to add (e.g., "v*" for all v-prefixed tags)'
-        required: true
-        type: string
 
 jobs:
-  add-tag-rule:
+  add-deployment-rule:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      deployments: write
-
     steps:
-      - name: Test PAT Authentication
+      - name: Add tag deployment rule
         env:
-          PAT: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}  # Using PERSONAL_ACCESS_TOKEN instead of PAT_TOKEN
         run: |
-          echo "Testing authentication with PAT..."
-          curl -L -X GET \
-            -H "Authorization: Bearer $PAT" \
-            https://api.github.com/user
-
-      - name: Fetch Current Environment Configuration
-        id: fetch-config
-        env:
-          PAT: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-        run: |
-          echo "Fetching current configuration for environment: ${{ inputs.environment_name }}"
-          curl -L -X GET \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $PAT" \
-            "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}" \
-            -o environment.json
-
-      - name: Add Tag Rule to Environment Configuration
-        id: update-config
-        run: |
-          echo "Adding tag rule for pattern: ${{ inputs.tag_pattern }}"
-
-          # Extract only the deployment_branch_policy and append the tag rule
-          jq --arg tag_pattern "${{ inputs.tag_pattern }}" \
-            '.deployment_branch_policy |= 
-              {protected_branches: false, custom_branch_policies: true, 
-               branch_policies: (.branch_policies // []) + [{"name": $tag_pattern, "type": "tag"}]}' \
-            environment.json > updated_environment.json
-
-          echo "Updated configuration:"
-          cat updated_environment.json
-
-      - name: Update Environment Configuration
-        env:
-          PAT: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-        run: |
-          echo "Updating environment configuration for: ${{ inputs.environment_name }}"
-          curl -L -X PUT \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $PAT" \
-            -H "Content-Type: application/json" \
-            "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}" \
-            --data-binary @updated_environment.json
-
-      - name: Verify Final Deployment Rules
-        env:
-          PAT: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-        run: |
-          echo "Verifying final configuration for environment: ${{ inputs.environment_name }}"
-          curl -L -X GET \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $PAT" \
-            "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}" | jq '.deployment_branch_policy.branch_policies'
+          # Get current deployment branch rules
+          RULES=$(gh api \
+            repos/${{ github.event.inputs.repository }}/environments/${{ github.event.inputs.environment_name }}/deployment-branch-policies \
+            --jq '.branch_policies')
+          
+          # Create new rule for tags
+          NEW_RULE='{"protected_branches":false,"custom_branch_policies":true,"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true},"branch_policies":'$RULES'}'
+          
+          # Add new tag rule
+          TAG_RULE='{"name":"refs/tags/*","type":"tag"}'
+          
+          # Combine existing rules with new tag rule
+          if [ "$RULES" == "[]" ]; then
+            UPDATED_RULES="[$TAG_RULE]"
+          else
+            UPDATED_RULES=$(echo $RULES | jq '. + ['$TAG_RULE']')
+          fi
+          
+          # Update environment deployment rules
+          gh api \
+            --method PUT \
+            repos/${{ github.event.inputs.repository }}/environments/${{ github.event.inputs.environment_name }}/deployment-branch-policies \
+            -f branch_policies="$UPDATED_RULES"
