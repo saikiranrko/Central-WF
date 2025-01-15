@@ -60,7 +60,7 @@ jobs:
           echo "Updated Protection Rules Payload: $UPDATED_RULES"
 
           # Step 2.4: Update the environment settings
-          UPDATE_RESPONSE=$(curl -s -X PATCH \
+          UPDATE_RESPONSE=$(curl -s -X PUT \
             -H "Authorization: Bearer $TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -H "Content-Type: application/json" \
