@@ -44,11 +44,17 @@ jobs:
           
           echo "Updated rules: $UPDATED_RULES"
           
-          # Update environment deployment rules
+          # Create the complete payload
+          PAYLOAD=$(jq -n --argjson rules "$UPDATED_RULES" '{
+            "branch_policies": $rules
+          }')
+          
+          # Update environment deployment rules using the correct API endpoint
           RESPONSE=$(gh api \
             --method PUT \
-            repos/${{ github.event.inputs.repository }}/environments/${{ github.event.inputs.environment_name }}/deployment-branch-policies \
-            -f branch_policies="$UPDATED_RULES")
+            "repos/${{ github.event.inputs.repository }}/environments/${{ github.event.inputs.environment_name }}/deployment-branch-policies" \
+            -H "Accept: application/vnd.github.v3+json" \
+            --input - <<< "$PAYLOAD")
           
           if [ $? -eq 0 ]; then
             echo "Successfully updated deployment rules"
