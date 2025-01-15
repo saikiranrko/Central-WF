@@ -9,6 +9,9 @@ on:
       repository:
         description: 'Repository name (format: owner/repo)'
         required: true
+      tag_pattern:
+        description: 'Tag pattern (e.g., refs/tags/v*, refs/tags/release-*)'
+        required: true
 
 jobs:
   add-deployment-rule:
@@ -16,7 +19,7 @@ jobs:
     steps:
       - name: Add tag deployment rule
         env:
-          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}  # Using PERSONAL_ACCESS_TOKEN instead of PAT_TOKEN
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
           # Get current deployment branch rules
           RULES=$(gh api \
@@ -26,8 +29,8 @@ jobs:
           # Create new rule for tags
           NEW_RULE='{"protected_branches":false,"custom_branch_policies":true,"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true},"branch_policies":'$RULES'}'
           
-          # Add new tag rule
-          TAG_RULE='{"name":"refs/tags/*","type":"tag"}'
+          # Add new tag rule with input pattern
+          TAG_RULE='{"name":"${{ github.event.inputs.tag_pattern }}","type":"tag"}'
           
           # Combine existing rules with new tag rule
           if [ "$RULES" == "[]" ]; then
