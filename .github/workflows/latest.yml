@@ -1,47 +1,70 @@
-name: Add Tag Deployment Rule
+name: Add Deployment Rule
 
 on:
   workflow_dispatch:
+    inputs:
+      branch_name:
+        description: 'Branch to update (e.g., main)'
+        required: true
+        default: 'main'
+      repo_name:
+        description: 'Repository to update (e.g., my-repo)'
+        required: true
+      environment_name:
+        description: 'Environment to update (e.g., production)'
+        required: true
+      tag_pattern:
+        description: 'Tag pattern to allow (e.g., v*)'
+        required: true
 
 jobs:
-  add-deployment-rule:
+  update-deployment-rule:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Add tag deployment rule
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Fetch the environment configuration
+        id: fetch-env
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PAT: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
-          echo "Starting deployment rule update for environment: Dev"
-          
-          # Create environment using the correct API path
-          echo "Creating/Verifying environment..."
-          gh api \
-            --method PUT \
-            /repos/${{ github.repository }}/environments/Dev \
-            --silent || true
-          
-          # Create deployment rule payload
-          TAG_RULE=$(jq -n '{
-            "branch_policies": [{
-              "name": "refs/tags/release-*",
-              "type": "tag"
-            }]
-          }')
-          
-          echo "Setting deployment rules..."
-          echo "$TAG_RULE"
-          
-          # Update deployment rules using the correct API path
-          RESPONSE=$(gh api \
-            --method PUT \
-            /repos/${{ github.repository }}/environments/Dev/deployment-branch-policies \
-            -H "Accept: application/vnd.github.v3+json" \
-            --input - <<< "$TAG_RULE")
-          
-          if [ $? -eq 0 ]; then
-            echo "Successfully updated deployment rules"
-            echo "Response: $RESPONSE"
-          else
-            echo "Error updating deployment rules: $RESPONSE"
-            exit 1
-          fi
+          curl -H "Authorization: Bearer $PAT" \
+               -H "Accept: application/vnd.github+json" \
+               -X GET \
+               https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repo_name }}/environments/${{ github.event.inputs.environment_name }} \
+               -o environment.json
+
+      - name: Update the environment JSON with the tag rule
+        id: update-env
+        run: |
+          jq --arg tag_pattern "${{ github.event.inputs.tag_pattern }}" \
+             --arg branch_name "${{ github.event.inputs.branch_name }}" \
+             '.deployment_branch_policy.rules += [{"ref_type": "tag", "pattern": $tag_pattern}]' \
+             environment.json > updated_environment.json
+
+      - name: Apply the updated environment configuration
+        id: apply-env
+        env:
+          PAT: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        run: |
+          curl -H "Authorization: Bearer $PAT" \
+               -H "Accept: application/vnd.github+json" \
+               -X PATCH \
+               -d @updated_environment.json \
+               https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repo_name }}/environments/${{ github.event.inputs.environment_name }}
+
+      - name: Verify the update
+        id: verify-env
+        env:
+          PAT: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        run: |
+          curl -H "Authorization: Bearer $PAT" \
+               -H "Accept: application/vnd.github+json" \
+               -X GET \
+               https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repo_name }}/environments/${{ github.event.inputs.environment_name }} \
+               | jq .deployment_branch_policy
