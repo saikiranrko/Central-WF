@@ -24,6 +24,15 @@ jobs:
       deployments: write
 
     steps:
+      - name: Test PAT Authentication
+        env:
+          PAT: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        run: |
+          echo "Testing authentication with PAT..."
+          curl -L -X GET \
+            -H "Authorization: Bearer $PAT" \
+            https://api.github.com/user
+
       - name: Fetch Current Environment Configuration
         id: fetch-config
         env:
@@ -42,12 +51,11 @@ jobs:
         id: update-config
         run: |
           echo "Adding tag rule for pattern: ${{ inputs.tag_pattern }}"
-
           jq --arg tag_pattern "${{ inputs.tag_pattern }}" \
-            '.deployment_branch_policy |= 
-              {protected_branches: false, custom_branch_policies: true} |
-              .deployment_branch_policy.branch_policies += 
-              [{"name": $tag_pattern, "type": "tag"}]' \
+            '{deployment_branch_policy: 
+              {protected_branches: false, custom_branch_policies: true, 
+               branch_policies: [{"name": $tag_pattern, "type": "tag"}]}
+            }' \
             environment.json > updated_environment.json
 
           echo "Updated configuration:"
