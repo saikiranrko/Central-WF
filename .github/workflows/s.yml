@@ -25,58 +25,153 @@ jobs:
       deployments: write
     
     steps:
-      - name: Update environment settings
+      - name: Initial setup
         run: |
-          # Prepare the environment update payload
+          # Create a directory for temporary files
+          mkdir -p ./tmp
+          # Function to handle API calls
+          call_api() {
+            local method=$1
+            local url=$2
+            local output_file=$3
+            local data=$4
+            
+            if [ -n "$data" ]; then
+              curl -L -X $method \
+                -H "Accept: application/vnd.github+json" \
+                -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                -H "Content-Type: application/json" \
+                -o "$output_file" -w "%{http_code}" \
+                "$url" \
+                -d "$data"
+            else
+              curl -L -X $method \
+                -H "Accept: application/vnd.github+json" \
+                -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                -H "Content-Type: application/json" \
+                -o "$output_file" -w "%{http_code}" \
+                "$url"
+            fi
+          }
+          echo "call_api() { $(declare -f call_api | tail -n +2)" >> $GITHUB_ENV
+
+      - name: Check repository and environment
+        id: check-env
+        run: |
+          # Check repository
+          STATUS=$(call_api "GET" \
+            "https://api.github.com/repos/${{ inputs.repository }}" \
+            "./tmp/repo.json")
+          
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Repository not found or no access"
+            exit 1
+          fi
+          
+          # Get environment list
+          STATUS=$(call_api "GET" \
+            "https://api.github.com/repos/${{ inputs.repository }}/environments" \
+            "./tmp/envs.json")
+          
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Failed to fetch environments"
+            exit 1
+          fi
+          
+          # Check if environment exists
+          ENV_EXISTS=$(jq -r --arg env "${{ inputs.environment_name }}" \
+            '.environments[] | select(.name == $env) | .name' "./tmp/envs.json")
+          
+          if [ -z "$ENV_EXISTS" ]; then
+            echo "env_exists=false" >> $GITHUB_OUTPUT
+          else
+            echo "env_exists=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create or update environment
+        id: update-env
+        run: |
+          # Prepare environment payload
           echo '{
             "deployment_branch_policy": {
               "protected_branches": false,
               "custom_branch_policies": true
             }
-          }' > env_update.json
+          }' > ./tmp/env_payload.json
           
-          # Update environment settings
-          curl -L -X PUT \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            -H "Content-Type: application/json" \
+          # Create/Update environment
+          STATUS=$(call_api "PUT" \
             "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}" \
-            -d @env_update.json
+            "./tmp/env_response.json" \
+            "$(cat ./tmp/env_payload.json)")
           
-          rm env_update.json
+          if [[ "$STATUS" != "2"* ]]; then
+            echo "::error::Failed to update environment"
+            cat ./tmp/env_response.json
+            exit 1
+          fi
 
-      - name: Add deployment rule
+      - name: Get existing deployment rules
+        id: get-rules
         run: |
-          # Create deployment rules payload
+          STATUS=$(call_api "GET" \
+            "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}/deployment-branch-policies" \
+            "./tmp/existing_rules.json")
+          
+          # Check if rule already exists
+          if [ -f "./tmp/existing_rules.json" ]; then
+            TAG_EXISTS=$(jq -r --arg pattern "${{ inputs.tag_pattern }}" \
+              '.branch_policies[] | select(.name == $pattern and .type == "tag") | .name' \
+              "./tmp/existing_rules.json")
+            
+            if [ -n "$TAG_EXISTS" ]; then
+              echo "::notice::Tag pattern already exists"
+              echo "tag_exists=true" >> $GITHUB_OUTPUT
+            else
+              echo "tag_exists=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "tag_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Add tag deployment rule
+        if: steps.get-rules.outputs.tag_exists != 'true'
+        run: |
+          # Prepare rule payload
           echo '{
             "name": "${{ inputs.tag_pattern }}",
             "type": "tag"
-          }' > rule.json
+          }' > ./tmp/rule_payload.json
           
-          echo "Adding deployment rule with payload:"
-          cat rule.json
-          
-          # Add the deployment rule
-          HTTP_STATUS=$(curl -L -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            -H "Content-Type: application/json" \
-            -o response.txt -w "%{http_code}" \
+          # Add the rule
+          STATUS=$(call_api "POST" \
             "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}/deployment-branch-policies/branches" \
-            -d @rule.json)
+            "./tmp/rule_response.json" \
+            "$(cat ./tmp/rule_payload.json)")
           
-          echo "Response status: $HTTP_STATUS"
-          echo "Response body:"
-          cat response.txt
-          
-          if [[ "$HTTP_STATUS" != "2"* ]]; then
-            echo "::error::Failed to add deployment rule. Status code: $HTTP_STATUS"
+          if [[ "$STATUS" != "2"* ]]; then
+            echo "::error::Failed to add tag rule. Status: $STATUS"
+            cat ./tmp/rule_response.json
             exit 1
           fi
           
-          echo "Successfully added deployment rule"
+          echo "Successfully added tag deployment rule: ${{ inputs.tag_pattern }}"
+
+      - name: Verify deployment rules
+        run: |
+          # Get final rules
+          STATUS=$(call_api "GET" \
+            "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}/deployment-branch-policies" \
+            "./tmp/final_rules.json")
+          
+          if [ "$STATUS" == "200" ]; then
+            echo "Final deployment rules:"
+            jq '.' "./tmp/final_rules.json"
+          else
+            echo "::warning::Could not verify final rules"
+          fi
           
           # Cleanup
-          rm -f rule.json response.txt
+          rm -rf ./tmp
