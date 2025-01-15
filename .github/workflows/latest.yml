@@ -52,9 +52,9 @@ jobs:
         run: |
           echo "Adding tag rule for pattern: ${{ inputs.tag_pattern }}"
           jq --arg tag_pattern "${{ inputs.tag_pattern }}" \
-            '{deployment_branch_policy: 
+            '.deployment_branch_policy |= 
               {protected_branches: false, custom_branch_policies: true, 
-               branch_policies: (.deployment_branch_policy.branch_policies // []) + [{"name": $tag_pattern, "type": "tag"}]}}' \
+               branch_policies: (.branch_policies // [] | . + [{"name": $tag_pattern, "type": "tag"}])}' \
             environment.json > updated_environment.json
 
           echo "Updated configuration:"
