@@ -1,66 +1,74 @@
-name: Add Deployment Rule
+name: Add Deployment Tag Rule
 
 on:
   workflow_dispatch:
     inputs:
-      repo_name:
-        description: 'Repository to update (e.g., my-repo)'
+      environment:
+        description: "The target environment (e.g., production, staging)"
         required: true
-      environment_name:
-        description: 'Environment to update (e.g., production)'
+      repository:
+        description: "The repository (owner/repo format)"
         required: true
-      tag_pattern:
-        description: 'Tag pattern to allow (e.g., v*)'
+      tag:
+        description: "The tag to be added as a rule"
         required: true
 
 jobs:
-  update-deployment-rule:
+  add-tag-rule:
     runs-on: ubuntu-latest
 
     steps:
+      # Step 1: Checkout the repository (if needed)
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Install jq
-        run: sudo apt-get install -y jq
-
-      - name: Fetch the environment configuration
-        id: fetch-env
+      # Step 2: Update the environment deployment rule
+      - name: Add Tag Rule to Environment
         env:
-          PAT: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
-          curl -H "Authorization: Bearer $PAT" \
-               -H "Accept: application/vnd.github+json" \
-               -X GET \
-               https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repo_name }}/environments/${{ github.event.inputs.environment_name }} \
-               -o environment.json
+          # Assign variables from input
+          ENVIRONMENT="${{ github.event.inputs.environment }}"
+          REPOSITORY="${{ github.event.inputs.repository }}"
+          TAG="${{ github.event.inputs.tag }}"
+          TOKEN="${{ secrets.PERSONAL_ACCESS_TOKEN }}"
 
-      - name: Update the environment JSON with the tag rule
-        id: update-env
-        run: |
-          jq --arg tag_pattern "${{ github.event.inputs.tag_pattern }}" \
-             --arg branch_name "${{ github.event.inputs.branch_name }}" \
-             '.deployment_branch_policy.rules += [{"ref_type": "tag", "pattern": $tag_pattern}]' \
-             environment.json > updated_environment.json
+          # Extract owner and repo from REPOSITORY
+          OWNER=$(echo $REPOSITORY | cut -d'/' -f1)
+          REPO=$(echo $REPOSITORY | cut -d'/' -f2)
 
-      - name: Apply the updated environment configuration
-        id: apply-env
-        env:
-          PAT: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-        run: |
-          curl -H "Authorization: Bearer $PAT" \
-               -H "Accept: application/vnd.github+json" \
-               -X PATCH \
-               -d @updated_environment.json \
-               https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repo_name }}/environments/${{ github.event.inputs.environment_name }}
+          # Step 2.1: Get the current environment settings
+          ENV_URL="https://api.github.com/repos/$OWNER/$REPO/environments/$ENVIRONMENT"
+          ENV_RESPONSE=$(curl -s -H "Authorization: Bearer $TOKEN" \
+                                  -H "Accept: application/vnd.github+json" \
+                                  $ENV_URL)
+          if [ -z "$ENV_RESPONSE" ] || [[ $ENV_RESPONSE == *"Not Found"* ]]; then
+            echo "Error: Environment $ENVIRONMENT not found in $REPOSITORY."
+            exit 1
+          fi
 
-      - name: Verify the update
-        id: verify-env
-        env:
-          PAT: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-        run: |
-          curl -H "Authorization: Bearer $PAT" \
-               -H "Accept: application/vnd.github+json" \
-               -X GET \
-               https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repo_name }}/environments/${{ github.event.inputs.environment_name }} \
-               | jq .deployment_branch_policy
+          # Step 2.2: Parse the protection rules JSON
+          PROTECTION_RULES=$(echo $ENV_RESPONSE | jq '.protection_rules')
+          if [ -z "$PROTECTION_RULES" ]; then
+            echo "Warning: No existing protection rules found. Initializing..."
+            PROTECTION_RULES="[]"
+          fi
+
+          # Step 2.3: Add the new tag rule
+          UPDATED_RULES=$(echo $PROTECTION_RULES | jq --arg TAG "$TAG" '. + [{"type": "tag", "pattern": $TAG}]')
+
+          # Step 2.4: Update the environment settings
+          UPDATE_RESPONSE=$(curl -s -X PATCH \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            -d "{\"protection_rules\": $UPDATED_RULES}" \
+            $ENV_URL)
+
+          # Step 2.5: Confirm the update was successful
+          if [[ $UPDATE_RESPONSE == *"protection_rules"* ]]; then
+            echo "Successfully added the tag rule to environment $ENVIRONMENT in $REPOSITORY."
+          else
+            echo "Failed to update environment. Response: $UPDATE_RESPONSE"
+            exit 1
+          fi
