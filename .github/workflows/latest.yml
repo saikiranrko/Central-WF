@@ -69,3 +69,13 @@ jobs:
             -H "Content-Type: application/json" \
             "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}" \
             --data-binary @updated_environment.json
+
+      - name: Verify Final Deployment Rules
+        env:
+          PAT: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        run: |
+          echo "Verifying final configuration for environment: ${{ inputs.environment_name }}"
+          curl -L -X GET \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $PAT" \
+            "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}" | jq '.deployment_branch_policy.branch_policies'
