@@ -1,0 +1,71 @@
+name: Add Deployment Tag Rule
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment_name:
+        description: 'Environment name to modify'
+        required: true
+        type: string
+      repository:
+        description: 'Repository name (format: owner/repo)'
+        required: true
+        type: string
+      tag_pattern:
+        description: 'Tag pattern to add (e.g., "v*" for all v-prefixed tags)'
+        required: true
+        type: string
+
+jobs:
+  add-tag-rule:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+
+    steps:
+      - name: Test PAT Authentication
+        env:
+          PAT: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        run: |
+          echo "Testing authentication with PAT..."
+          curl -L -X GET \
+            -H "Authorization: Bearer $PAT" \
+            https://api.github.com/user
+
+      - name: Fetch Current Environment Configuration
+        id: fetch-config
+        env:
+          PAT: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        run: |
+          echo "Fetching current configuration for environment: ${{ inputs.environment_name }}"
+          RESPONSE=$(curl -L -X GET \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $PAT" \
+            "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}")
+          
+          echo "Response: $RESPONSE"
+          echo "$RESPONSE" > environment.json
+
+      - name: Add Tag Rule to Environment Configuration
+        id: update-config
+        run: |
+          echo "Adding tag rule for pattern: ${{ inputs.tag_pattern }}"
+          jq --arg tag_pattern "${{ inputs.tag_pattern }}" \
+            '.deployment_branch_policy.branch_policies += [{"name": $tag_pattern, "type": "tag"}]' \
+            environment.json > updated_environment.json
+
+          echo "Updated configuration:"
+          cat updated_environment.json
+
+      - name: Update Environment Configuration
+        env:
+          PAT: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        run: |
+          echo "Updating environment configuration for: ${{ inputs.environment_name }}"
+          curl -L -X PUT \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $PAT" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}" \
+            --data-binary @updated_environment.json
