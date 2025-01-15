@@ -2,16 +2,6 @@ name: Add Tag Deployment Rule
 
 on:
   workflow_dispatch:
-    inputs:
-      environment_name:
-        description: 'Environment name'
-        required: true
-      repository:
-        description: 'Repository name (format: owner/repo)'
-        required: true
-      tag_pattern:
-        description: 'Tag pattern'
-        required: true
 
 jobs:
   add-deployment-rule:
@@ -19,21 +9,21 @@ jobs:
     steps:
       - name: Add tag deployment rule
         env:
-          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Starting deployment rule update for environment: Dev"
           
-          # First, create the environment if it doesn't exist
+          # Create environment using the correct API path
           echo "Creating/Verifying environment..."
           gh api \
             --method PUT \
-            repos/saikiranrko/sbc/environments/Dev \
+            /repos/${{ github.repository }}/environments/Dev \
             --silent || true
           
-          # Create initial deployment branch policy if none exists
-          TAG_RULE=$(jq -n --arg pattern "refs/tags/release-*" '{
+          # Create deployment rule payload
+          TAG_RULE=$(jq -n '{
             "branch_policies": [{
-              "name": $pattern,
+              "name": "refs/tags/release-*",
               "type": "tag"
             }]
           }')
@@ -41,10 +31,10 @@ jobs:
           echo "Setting deployment rules..."
           echo "$TAG_RULE"
           
-          # Update environment deployment rules
+          # Update deployment rules using the correct API path
           RESPONSE=$(gh api \
             --method PUT \
-            repos/saikiranrko/sbc/environments/Dev/deployment-branch-policies \
+            /repos/${{ github.repository }}/environments/Dev/deployment-branch-policies \
             -H "Accept: application/vnd.github.v3+json" \
             --input - <<< "$TAG_RULE")
           
