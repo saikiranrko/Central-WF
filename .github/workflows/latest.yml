@@ -21,26 +21,54 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
-          # Get current deployment branch rules
+          echo "Starting deployment rule update for environment: ${{ github.event.inputs.environment_name }}"
+          
+          # Get current deployment branch rules with error handling
+          echo "Fetching current deployment rules..."
           RULES=$(gh api \
             repos/${{ github.event.inputs.repository }}/environments/${{ github.event.inputs.environment_name }}/deployment-branch-policies \
-            --jq '.branch_policies')
+            --jq '.branch_policies' 2>&1) || {
+              echo "Error fetching deployment rules: $RULES"
+              exit 1
+          }
           
-          # Create new rule for tags
-          NEW_RULE='{"protected_branches":false,"custom_branch_policies":true,"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true},"branch_policies":'$RULES'}'
+          echo "Current rules: $RULES"
           
-          # Add new tag rule with input pattern
-          TAG_RULE='{"name":"${{ github.event.inputs.tag_pattern }}","type":"tag"}'
+          # Create new deployment policy structure
+          echo "Creating new deployment policy..."
+          NEW_POLICY='{
+            "protected_branches": false,
+            "custom_branch_policies": true
+          }'
+          
+          # Create new tag rule with input pattern
+          echo "Creating tag rule with pattern: ${{ github.event.inputs.tag_pattern }}"
+          TAG_RULE='{
+            "name": "${{ github.event.inputs.tag_pattern }}",
+            "type": "tag"
+          }'
           
           # Combine existing rules with new tag rule
-          if [ "$RULES" == "[]" ]; then
+          echo "Combining rules..."
+          if [ "$RULES" == "[]" ] || [ -z "$RULES" ]; then
             UPDATED_RULES="[$TAG_RULE]"
           else
             UPDATED_RULES=$(echo $RULES | jq '. + ['$TAG_RULE']')
           fi
           
-          # Update environment deployment rules
-          gh api \
+          echo "Updated rules: $UPDATED_RULES"
+          
+          # Update environment deployment rules with error handling
+          echo "Updating environment deployment rules..."
+          RESPONSE=$(gh api \
             --method PUT \
             repos/${{ github.event.inputs.repository }}/environments/${{ github.event.inputs.environment_name }}/deployment-branch-policies \
-            -f branch_policies="$UPDATED_RULES"
+            -f branch_policies="$UPDATED_RULES" 2>&1)
+          
+          if [ $? -eq 0 ]; then
+            echo "Successfully updated deployment rules"
+            echo "Response: $RESPONSE"
+          else
+            echo "Error updating deployment rules: $RESPONSE"
+            exit 1
+          fi
