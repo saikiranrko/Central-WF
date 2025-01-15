@@ -5,7 +5,7 @@ on:
     inputs:
       branch_name:
         description: 'Branch to update (e.g., main)'
-        required: true
+        required: false
         default: 'main'
       repo_name:
         description: 'Repository to update (e.g., my-repo)'
