@@ -26,11 +26,13 @@ jobs:
     
     steps:
       - name: Enable custom branch policies
+        env:
+          PAT: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
           echo "Enabling custom branch policies for environment: ${{ inputs.environment_name }} in repository: ${{ inputs.repository }}"
           curl -L -X PUT \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: Bearer $PAT" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             -H "Content-Type: application/json" \
             "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}" \
@@ -43,11 +45,13 @@ jobs:
 
       - name: Get existing rules
         id: get-rules
+        env:
+          PAT: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
           echo "Fetching existing deployment rules for environment: ${{ inputs.environment_name }}"
           RESPONSE=$(curl -L \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: Bearer $PAT" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}/deployment-branch-policies")
           
@@ -60,16 +64,16 @@ jobs:
 
       - name: Add tag rule
         if: env.exists != 'true'
+        env:
+          PAT: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
           echo "Adding tag rule: ${{ inputs.tag_pattern }} to environment: ${{ inputs.environment_name }} in repository: ${{ inputs.repository }}"
 
           API_URL="https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}/deployment-branch-policies"
           
-          echo "API URL: $API_URL"
-          
           RESPONSE_CODE=$(curl -L -X POST \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: Bearer $PAT" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             -H "Content-Type: application/json" \
             -w "%{http_code}" \
@@ -93,10 +97,12 @@ jobs:
           fi
 
       - name: Verify final configuration
+        env:
+          PAT: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
           echo "Verifying final deployment rules configuration for environment: ${{ inputs.environment_name }}"
           curl -L \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: Bearer $PAT" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "https://api.github.com/repos/${{ inputs.repository }}/environments/${{ inputs.environment_name }}/deployment-branch-policies" | jq '.'
