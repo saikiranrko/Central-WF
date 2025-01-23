@@ -1,4 +1,4 @@
-name: Configure Tag Protection
+name: ConfigureTag Protection
 
 on:
   workflow_dispatch:
