@@ -49,11 +49,13 @@ jobs:
         git add updated_repo_details.json
         git commit -m "Added tag protection with pattern ${{ github.event.inputs.tag_pattern }}"
         git push origin $NEW_BRANCH
+        echo "New branch $NEW_BRANCH created and pushed."
 
     - name: Create Pull Request
       env:
         PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
       run: |
+        echo "Creating a pull request..."
         PR_RESPONSE=$(curl -X POST \
           -H "Authorization: Bearer $PERSONAL_ACCESS_TOKEN" \
           -H "Accept: application/vnd.github.v3+json" \
@@ -65,19 +67,19 @@ jobs:
             "body": "This pull request adds tag protection with pattern '${{ github.event.inputs.tag_pattern }}'."
           }')
 
+        echo "PR_RESPONSE=$PR_RESPONSE" # Debug the API response
         PR_NUMBER=$(echo "$PR_RESPONSE" | jq '.number')
-        echo "Pull request number: $PR_NUMBER"
+        echo "Extracted PR_NUMBER=$PR_NUMBER"
 
-    - name: Add Self as Reviewer
-      env:
-        PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-      run: |
-        echo "PR_NUMBER=$PR_NUMBER"
         if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" = "null" ]; then
           echo "Error: Pull request number is invalid. Exiting."
           exit 1
         fi
 
+    - name: Add Self as Reviewer
+      env:
+        PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      run: |
         echo "Adding self as reviewer to the pull request..."
         curl -X POST \
           -H "Authorization: Bearer $PERSONAL_ACCESS_TOKEN" \
