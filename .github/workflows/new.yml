@@ -14,7 +14,7 @@ on:
       repository:
         description: 'Owner/Repository to apply tag protection'
         required: true
-        default: 'saikiranrko/abc'
+        default: 'owner/repo'
 
 jobs:
   configure-tag-protection:
@@ -30,60 +30,18 @@ jobs:
 
     - name: Create Configuration File
       run: |
-        echo "Overwriting updated_repo_details.json..."
+        echo "Creating updated_repo_details.json..."
         echo '{ "tag_protection": { "ref_type": "tag", "pattern": "'${{ github.event.inputs.tag_pattern }}'", "environment": "'${{ github.event.inputs.environment }}'" } }' > updated_repo_details.json
-        echo "File updated_repo_details.json created or overwritten."
+        echo "File updated_repo_details.json created."
 
-    - name: Push Changes to a New Branch
+    - name: Commit and Push Changes Directly to Main
       run: |
         git config --global user.email "actions@github.com"
         git config --global user.name "GitHub Actions"
-        NEW_BRANCH="tag-protection-${{ github.run_id }}"
-        git checkout -b $NEW_BRANCH
         git add updated_repo_details.json
         if git diff --cached --quiet; then
           echo "No changes to commit."
         else
           git commit -m "Added tag protection with pattern ${{ github.event.inputs.tag_pattern }}"
-        fi
-        git push origin $NEW_BRANCH || { echo "Failed to push branch."; exit 1; }
-        echo "Branch $NEW_BRANCH pushed successfully."
-
-    - name: Create Pull Request
-      env:
-        PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-      run: |
-        NEW_BRANCH="tag-protection-${{ github.run_id }}"
-        echo "Creating a pull request with head: $NEW_BRANCH"
-        PR_RESPONSE=$(curl -X POST \
-          -H "Authorization: Bearer $PERSONAL_ACCESS_TOKEN" \
-          -H "Accept: application/vnd.github.v3+json" \
-          https://api.github.com/repos/${{ github.event.inputs.repository }}/pulls \
-          -d "{ \"title\": \"Add tag protection\", \"head\": \"$NEW_BRANCH\", \"base\": \"main\" }")
-        echo "PR_RESPONSE=$PR_RESPONSE"
-        PR_NUMBER=$(echo "$PR_RESPONSE" | jq '.number')
-        echo "Extracted PR_NUMBER=$PR_NUMBER"
-        if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" = "null" ]; then
-          echo "Error: Pull request number is invalid. Exiting."
-          exit 1
-        fi
-
-    - name: Debug Pull Request Number
-      run: |
-        echo "PR_NUMBER=$PR_NUMBER"
-
-    - name: Merge Pull Request
-      env:
-        PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-      run: |
-        echo "Merging the pull request..."
-        if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" = "null" ]; then
-          echo "Error: Pull request number is invalid. Exiting."
-          exit 1
-        fi
-        curl -X PUT \
-          -H "Authorization: Bearer $PERSONAL_ACCESS_TOKEN" \
-          -H "Accept: application/vnd.github.v3+json" \
-          https://api.github.com/repos/${{ github.event.inputs.repository }}/pulls/$PR_NUMBER/merge \
-          -d '{ "merge_method": "merge" }' || { echo "Failed to merge pull request."; exit 1; }
-        echo "Pull request merged."
+          git push origin main || { echo "Failed to push changes."; exit 1; }
+          echo "Changes pushed directly to main branch."
