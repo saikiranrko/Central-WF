@@ -1,4 +1,4 @@
-name: Configure Tag Protection 
+name: Configure Tag Protection
 
 on:
   workflow_dispatch:
@@ -76,7 +76,25 @@ jobs:
           exit 1
         fi
 
-    - name: Add Self as Sole Reviewer
+    - name: Update Branch Protection Rule to Require 1 Approval
+      env:
+        PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      run: |
+        echo "Updating branch protection rule to require 1 approver..."
+        curl -X PATCH \
+          -H "Authorization: Bearer $PERSONAL_ACCESS_TOKEN" \
+          -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/${{ github.event.inputs.repository }}/branches/main/protection \
+          -d ' {
+            "required_pull_request_reviews": {
+              "dismiss_stale_reviews": true,
+              "require_code_owner_reviews": false,
+              "required_approving_review_count": 1
+            }
+          }'
+        echo "Branch protection rule updated to require 1 approval."
+
+    - name: Add Self as Sole Reviewer and Approve
       env:
         PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
       run: |
@@ -87,10 +105,6 @@ jobs:
           https://api.github.com/repos/${{ github.event.inputs.repository }}/pulls/$PR_NUMBER/requested_reviewers \
           -d '{"reviewers": ["'${{ github.actor }}'"]}'
 
-    - name: Approve and Merge Pull Request
-      env:
-        PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-      run: |
         echo "Approving the pull request..."
         curl -X POST \
           -H "Authorization: Bearer $PERSONAL_ACCESS_TOKEN" \
@@ -100,6 +114,10 @@ jobs:
             "event": "APPROVE"
           }'
 
+    - name: Merge Pull Request
+      env:
+        PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      run: |
         echo "Merging the pull request..."
         curl -X PUT \
           -H "Authorization: Bearer $PERSONAL_ACCESS_TOKEN" \
