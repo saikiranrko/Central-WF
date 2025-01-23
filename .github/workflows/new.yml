@@ -30,19 +30,29 @@ jobs:
 
     - name: Create Configuration File
       run: |
-        echo "Creating updated_repo_details.json..."
+        echo "Overwriting updated_repo_details.json..."
         echo '{ "tag_protection": { "ref_type": "tag", "pattern": "'${{ github.event.inputs.tag_pattern }}'", "environment": "'${{ github.event.inputs.environment }}'" } }' > updated_repo_details.json
-        echo "File updated_repo_details.json created."
+        echo "File updated_repo_details.json created or overwritten."
 
-    - name: Push Changes to a New Branch
+    - name: Commit Changes if Any
       run: |
         git config --global user.email "actions@github.com"
         git config --global user.name "GitHub Actions"
         NEW_BRANCH="tag-protection-${{ github.run_id }}"
         git checkout -b $NEW_BRANCH
         git add updated_repo_details.json
-        git commit -m "Added tag protection with pattern ${{ github.event.inputs.tag_pattern }}"
-        git push origin $NEW_BRANCH
+        if git diff --cached --quiet; then
+          echo "No changes to commit."
+        else
+          git commit -m "Added tag protection with pattern ${{ github.event.inputs.tag_pattern }}"
+          git push origin $NEW_BRANCH
+          echo "Changes committed and branch pushed."
+        fi
+
+    - name: Debug Git Status
+      run: |
+        git status
+        git diff
 
     - name: Create Pull Request
       env:
