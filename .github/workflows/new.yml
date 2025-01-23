@@ -3,10 +3,6 @@ name: Configure Tag Protection
 on:
   workflow_dispatch:
     inputs:
-      branch:
-        description: 'Branch to associate tag protection'
-        required: true
-        default: 'main'
       tag_pattern:
         description: 'Tag pattern to protect'
         required: true
@@ -29,14 +25,13 @@ jobs:
       uses: actions/checkout@v3
       with:
         repository: ${{ github.event.inputs.repository }}
-        ref: ${{ github.event.inputs.branch }}
+        ref: main  # Hardcoded to always use the "main" branch
         token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 
     - name: Fetch Inputs
       id: inputs
       run: |
         echo "Fetching inputs..."
-        echo "Branch: ${{ github.event.inputs.branch }}"
         echo "Tag Pattern: ${{ github.event.inputs.tag_pattern }}"
         echo "Environment: ${{ github.event.inputs.environment }}"
         echo "Repository: ${{ github.event.inputs.repository }}"
@@ -62,7 +57,7 @@ jobs:
 
         # Add custom metadata for tag protection (this is a simulated example)
         echo "$REPO_JSON" | jq \
-          '. + {tag_protection: {ref_type: "tag", pattern: "'${{ github.event.inputs.tag_pattern }}'", branch: "'${{ github.event.inputs.branch }}'", environment: "'${{ github.event.inputs.environment }}'"}}' \
+          '. + {tag_protection: {ref_type: "tag", pattern: "'${{ github.event.inputs.tag_pattern }}'", branch: "main", environment: "'${{ github.event.inputs.environment }}'"}}' \
           > updated_repo_details.json
         echo "Updated repository configuration saved to updated_repo_details.json."
 
@@ -88,7 +83,7 @@ jobs:
           -d '{
             "title": "Add tag protection with pattern '${{ github.event.inputs.tag_pattern }}'",
             "head": "tag-protection-'${{ github.run_id }}'",
-            "base": "'${{ github.event.inputs.branch }}'",
+            "base": "main",
             "body": "This pull request adds tag protection with pattern '${{ github.event.inputs.tag_pattern }}' to the repository."
           }')
 
