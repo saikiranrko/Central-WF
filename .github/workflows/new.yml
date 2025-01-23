@@ -14,7 +14,7 @@ on:
       repository:
         description: 'Owner/Repository to apply tag protection'
         required: true
-        default: 'owner/repo'
+        default: 'saikiranrko/abc'
 
 jobs:
   configure-tag-protection:
@@ -30,9 +30,9 @@ jobs:
 
     - name: Create Configuration File
       run: |
-        echo "Creating updated_repo_details.json..."
+        echo "Overwriting updated_repo_details.json..."
         echo '{ "tag_protection": { "ref_type": "tag", "pattern": "'${{ github.event.inputs.tag_pattern }}'", "environment": "'${{ github.event.inputs.environment }}'" } }' > updated_repo_details.json
-        echo "File updated_repo_details.json created."
+        echo "File updated_repo_details.json created or overwritten."
 
     - name: Commit and Push Changes Directly to Main
       run: |
@@ -45,3 +45,4 @@ jobs:
           git commit -m "Added tag protection with pattern ${{ github.event.inputs.tag_pattern }}"
           git push origin main || { echo "Failed to push changes."; exit 1; }
           echo "Changes pushed directly to main branch."
+        fi
