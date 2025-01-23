@@ -3,10 +3,6 @@ name: Configure Tag Protection
 on:
   workflow_dispatch:
     inputs:
-      branch:
-        description: 'Branch to associate tag protection'
-        required: true
-        default: 'main'
       tag_pattern:
         description: 'Tag pattern to protect'
         required: true
@@ -14,11 +10,11 @@ on:
       environment:
         description: 'Environment to apply tag protection'
         required: true
-        default: 'production'
+        default: 'Dev'
       repository:
         description: 'Repository to apply tag protection'
         required: true
-        default: 'my-repo'
+        default: 'saikiranrko/abc'
 
 jobs:
   configure-tag-protection:
