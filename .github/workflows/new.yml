@@ -1,0 +1,76 @@
+name: Add-Tag Protection
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to apply tag protection'
+        required: true
+        default: 'production'
+      branch:
+        description: 'Branch to associate with the tag protection rule'
+        required: true
+        default: 'main'
+      repository:
+        description: 'Repository to apply tag protection rule'
+        required: true
+        default: 'my-repo'
+      tag_pattern:
+        description: 'Tag pattern to protect'
+        required: true
+        default: 'release-*'
+
+jobs:
+  add-tag-protection:
+    name: Add Tag Protection Rule
+    runs-on: ubuntu-latest
+
+    steps:
+    # Step 1: Checkout the Repository
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    # Step 2: Set Inputs as Environment Variables
+    - name: Set Inputs
+      run: |
+        echo "Setting inputs as environment variables..."
+        echo "ENVIRONMENT=${{ github.event.inputs.environment }}" >> $GITHUB_ENV
+        echo "BRANCH=${{ github.event.inputs.branch }}" >> $GITHUB_ENV
+        echo "REPO=${{ github.event.inputs.repository }}" >> $GITHUB_ENV
+        echo "TAG_PATTERN=${{ github.event.inputs.tag_pattern }}" >> $GITHUB_ENV
+
+    # Step 3: Add Tag Protection Using GitHub API
+    - name: Add Tag Protection Rule
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        echo "Adding tag protection for repository $REPO, branch $BRANCH, in environment $ENVIRONMENT..."
+
+        curl -X POST \
+          -H "Authorization: Bearer $GITHUB_TOKEN" \
+          -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/${{ github.repository_owner }}/$REPO/branches/$BRANCH/protection \
+          -d '{
+            "required_status_checks": null,
+            "enforce_admins": true,
+            "required_pull_request_reviews": null,
+            "restrictions": null,
+            "required_linear_history": false,
+            "allow_force_pushes": false,
+            "allow_deletions": false
+          }'
+
+        curl -X POST \
+          -H "Authorization: Bearer $GITHUB_TOKEN" \
+          -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/${{ github.repository_owner }}/$REPO/tags/protection \
+          -d '{
+            "pattern": "'${TAG_PATTERN}'",
+            "required_status_checks": null,
+            "enforce_admins": true
+          }'
+
+    # Step 4: Log Success
+    - name: Log Completion
+      run: |
+        echo "Tag protection rule successfully added for pattern $TAG_PATTERN in repository $REPO and branch $BRANCH."
