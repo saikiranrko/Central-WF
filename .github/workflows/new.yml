@@ -64,6 +64,8 @@ jobs:
     - name: Create New Branch
       run: |
         echo "Creating a new branch for the changes..."
+        git config --global user.email "actions@github.com"
+        git config --global user.name "GitHub Actions"
         NEW_BRANCH="tag-protection-${{ github.run_id }}"
         git checkout -b $NEW_BRANCH
         git add updated_repo_details.json
