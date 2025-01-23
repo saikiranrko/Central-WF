@@ -1,4 +1,4 @@
-name: ConfigureTag Protection
+name: Configure Tag Protection
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ on:
       repository:
         description: 'Repository to apply tag protection'
         required: true
-        default: 'saikiranrko/abc'
+        default: 'abc'
 
 jobs:
   configure-tag-protection:
@@ -24,46 +24,12 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v3
       with:
-        repository: ${{ github.event.inputs.repository }}
-        ref: main  # Hardcoded to always use the "main" branch
+        repository: saikiranrko/${{ github.event.inputs.repository }}
+        ref: main
         token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-
-    - name: Fetch Inputs
-      id: inputs
-      run: |
-        echo "Fetching inputs..."
-        echo "Tag Pattern: ${{ github.event.inputs.tag_pattern }}"
-        echo "Environment: ${{ github.event.inputs.environment }}"
-        echo "Repository: ${{ github.event.inputs.repository }}"
-
-    - name: Fetch Repository Details
-      id: fetch_repo
-      env:
-        PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-      run: |
-        echo "Fetching repository details for ${{ github.event.inputs.repository }}..."
-        curl -X GET \
-          -H "Authorization: Bearer $PERSONAL_ACCESS_TOKEN" \
-          -H "Accept: application/vnd.github.v3+json" \
-          https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repository }} \
-          -o repo_details.json
-        echo "Repository details saved to repo_details.json"
-
-    - name: Update Configuration for Tag Protection
-      id: update_config
-      run: |
-        echo "Adding tag protection to repository configuration..."
-        REPO_JSON=$(cat repo_details.json)
-
-        # Add custom metadata for tag protection
-        echo "$REPO_JSON" | jq \
-          '. + {tag_protection: {ref_type: "tag", pattern: "'${{ github.event.inputs.tag_pattern }}'", branch: "main", environment: "'${{ github.event.inputs.environment }}'"}}' \
-          > updated_repo_details.json
-        echo "Updated repository configuration saved to updated_repo_details.json."
 
     - name: Push Changes to a New Branch
       run: |
-        echo "Creating a new branch for the changes..."
         git config --global user.email "actions@github.com"
         git config --global user.name "GitHub Actions"
         NEW_BRANCH="tag-protection-${{ github.run_id }}"
@@ -71,41 +37,30 @@ jobs:
         git add updated_repo_details.json
         git commit -m "Added tag protection with pattern ${{ github.event.inputs.tag_pattern }}"
         git push origin $NEW_BRANCH
-        echo "New branch $NEW_BRANCH created and pushed."
 
     - name: Create Pull Request
       env:
         PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
       run: |
-        echo "Creating a pull request..."
         PR_RESPONSE=$(curl -X POST \
           -H "Authorization: Bearer $PERSONAL_ACCESS_TOKEN" \
           -H "Accept: application/vnd.github.v3+json" \
-          https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repository }}/pulls \
+          https://api.github.com/repos/saikiranrko/${{ github.event.inputs.repository }}/pulls \
           -d '{
             "title": "Add tag protection with pattern '${{ github.event.inputs.tag_pattern }}'",
             "head": "tag-protection-'${{ github.run_id }}'",
             "base": "main",
-            "body": "This pull request adds tag protection with pattern '${{ github.event.inputs.tag_pattern }}' to the repository."
+            "body": "This pull request adds tag protection with pattern '${{ github.event.inputs.tag_pattern }}'."
           }')
 
-        echo "Pull request response: $PR_RESPONSE"
-
-        # Debugging Info
-        echo "Repository: ${{ github.repository_owner }}/${{ github.event.inputs.repository }}"
-        echo "Head Branch: tag-protection-${{ github.run_id }}"
-        echo "Base Branch: main"
-
-        # Extract Pull Request Number
         PR_NUMBER=$(echo "$PR_RESPONSE" | jq '.number')
         echo "Pull request number: $PR_NUMBER"
 
-        # Add Reviewer
-        echo "Adding reviewer to the pull request..."
+    - name: Add Reviewer
+      if: success() && steps.create_pr.outputs.PR_NUMBER != 'null'
+      run: |
         curl -X POST \
-          -H "Authorization: Bearer $PERSONAL_ACCESS_TOKEN" \
+          -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
           -H "Accept: application/vnd.github.v3+json" \
-          https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.inputs.repository }}/pulls/$PR_NUMBER/requested_reviewers \
-          -d '{
-            "reviewers": ["REVIEWER_USERNAME"]
-          }'
+          https://api.github.com/repos/saikiranrko/${{ github.event.inputs.repository }}/pulls/$PR_NUMBER/requested_reviewers \
+          -d '{"reviewers": ["REVIEWER_USERNAME"]}'
