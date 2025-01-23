@@ -45,14 +45,16 @@ jobs:
           echo "No changes to commit."
         else
           git commit -m "Added tag protection with pattern ${{ github.event.inputs.tag_pattern }}"
-          git push origin $NEW_BRANCH || { echo "Failed to push branch."; exit 1; }
-          echo "Branch $NEW_BRANCH pushed successfully."
         fi
+        git push origin $NEW_BRANCH || { echo "Failed to push branch."; exit 1; }
+        echo "Branch $NEW_BRANCH pushed successfully."
 
     - name: Debug Branch Push
       run: |
-        git branch -a
-        git log --oneline
+        echo "Listing local branches..."
+        git branch
+        echo "Listing remote branches..."
+        git ls-remote --heads origin
 
     - name: Create Pull Request
       env:
