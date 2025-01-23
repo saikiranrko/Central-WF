@@ -1,4 +1,6 @@
+tag-protection-12924186017
 tag-protection-12924206521
+ main
 {
   "tag_protection": {
     "ref_type": "tag",
@@ -6,6 +8,8 @@ tag-protection-12924206521
     "environment": "Dev"
   }
 }
+ tag-protection-12924186017
 
 { "tag_protection": { "ref_type": "tag", "pattern": "release-*", "environment": "Dev" } }
 
+main
