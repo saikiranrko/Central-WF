@@ -1,1 +1,1 @@
-{ "tag_protection": { "ref_type": "tag", "pattern": "release-*", "environment": "Dev" } }
+{ "tag_protection": { "ref_type": "tag", "pattern": "release-*", "environment": "Dev", "updated": "1737619163" } }
