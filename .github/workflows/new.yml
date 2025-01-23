@@ -68,11 +68,19 @@ jobs:
         PR_NUMBER=$(echo "$PR_RESPONSE" | jq '.number')
         echo "Pull request number: $PR_NUMBER"
 
-    - name: Add Reviewer
-      if: success() && steps.create_pr.outputs.PR_NUMBER != 'null'
+    - name: Add Self as Reviewer
+      env:
+        PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
       run: |
+        echo "PR_NUMBER=$PR_NUMBER"
+        if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" = "null" ]; then
+          echo "Error: Pull request number is invalid. Exiting."
+          exit 1
+        fi
+
+        echo "Adding self as reviewer to the pull request..."
         curl -X POST \
-          -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+          -H "Authorization: Bearer $PERSONAL_ACCESS_TOKEN" \
           -H "Accept: application/vnd.github.v3+json" \
           https://api.github.com/repos/${{ github.event.inputs.repository }}/pulls/$PR_NUMBER/requested_reviewers \
-          -d '{"reviewers": ["REVIEWER_USERNAME"]}'
+          -d '{"reviewers": ["'${{ github.actor }}'"]}'
