@@ -1,6 +1,7 @@
-name: Configure Tag Protection
+name: Enforce Tag Pattern
 
 on:
+  # Trigger on manual dispatch with custom inputs
   workflow_dispatch:
     inputs:
       tag_pattern:
@@ -16,33 +17,53 @@ on:
         required: true
         default: 'saikiranrko/abc'
 
+  # Trigger on tag creation
+  create:
+    tags:
+      - "*"
+
 jobs:
-  configure-tag-protection:
+  validate-tag:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v3
-      with:
-        repository: ${{ github.event.inputs.repository }}
-        ref: main
-        token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      - name: Set Inputs
+        id: set-inputs
+        run: |
+          # Retrieve inputs and set them as environment variables
+          echo "Setting tag pattern: ${{ github.event.inputs.tag_pattern }}"
+          echo "TAG_PATTERN=${{ github.event.inputs.tag_pattern }}" >> $GITHUB_ENV
 
-    - name: Create Configuration File
-      run: |
-        echo "Overwriting updated_repo_details.json..."
-        echo '{ "tag_protection": { "ref_type": "tag", "pattern": "'${{ github.event.inputs.tag_pattern }}'", "environment": "'${{ github.event.inputs.environment }}'" } }' > updated_repo_details.json
-        echo "File updated_repo_details.json created or overwritten."
+          echo "Setting environment: ${{ github.event.inputs.environment }}"
+          echo "TARGET_ENV=${{ github.event.inputs.environment }}" >> $GITHUB_ENV
 
-    - name: Commit and Push Changes Directly to Main
-      run: |
-        git config --global user.email "actions@github.com"
-        git config --global user.name "GitHub Actions"
-        git add updated_repo_details.json
-        if git diff --cached --quiet; then
-          echo "No changes to commit."
-        else
-          git commit -m "Added tag protection with pattern ${{ github.event.inputs.tag_pattern }}"
-          git push origin main || { echo "Failed to push changes."; exit 1; }
-          echo "Changes pushed directly to main branch."
-        fi
+          echo "Setting repository: ${{ github.event.inputs.repository }}"
+          echo "TARGET_REPO=${{ github.event.inputs.repository }}" >> $GITHUB_ENV
+
+      - name: Validate Tag Name
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Extract the created tag name and input values
+          TAG_NAME="${GITHUB_REF_NAME}"
+          TAG_PATTERN="${TAG_PATTERN}"
+          TARGET_ENV="${TARGET_ENV}"
+          TARGET_REPO="${TARGET_REPO}"
+
+          echo "Tag created: $TAG_NAME"
+          echo "Enforcing pattern: $TAG_PATTERN"
+          echo "Applying tag protection in environment: $TARGET_ENV for repository: $TARGET_REPO"
+
+          # Validate the tag name against the pattern
+          if [[ ! "$TAG_NAME" =~ $TAG_PATTERN ]]; then
+            echo "❌ Invalid tag name: $TAG_NAME"
+            echo "The tag must follow the pattern: $TAG_PATTERN"
+
+            # Delete the invalid tag using GitHub API
+            curl -X DELETE -H "Authorization: Bearer $GITHUB_TOKEN" \
+              "https://api.github.com/repos/$TARGET_REPO/git/refs/tags/${TAG_NAME}"
+
+            exit 1  # Fail the workflow to notify users
+          fi
+
+          echo "✅ Tag $TAG_NAME matches the required pattern and is protected."
