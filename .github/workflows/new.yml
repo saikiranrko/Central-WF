@@ -1,7 +1,6 @@
 name: Enforce Tag Pattern
 
 on:
-  # Trigger on manual dispatch with custom inputs
   workflow_dispatch:
     inputs:
       tag_pattern:
@@ -17,10 +16,12 @@ on:
         required: true
         default: 'saikiranrko/abc'
 
-  # Trigger on tag creation
   create:
     tags:
       - "*"
+
+permissions:
+  contents: write  # This is still needed for default token if PAT fails
 
 jobs:
   validate-tag:
@@ -42,10 +43,10 @@ jobs:
 
       - name: Validate Tag Name
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PERSONAL_ACCESS_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           # Extract the created tag name and input values
-          TAG_NAME="${GITHUB_REF_NAME}"
+          TAG_NAME="${GITHUB_REF_NAME#refs/tags/}"  # Remove 'refs/tags/' prefix
           TAG_PATTERN="${TAG_PATTERN}"
           TARGET_ENV="${TARGET_ENV}"
           TARGET_REPO="${TARGET_REPO}"
@@ -59,8 +60,8 @@ jobs:
             echo "❌ Invalid tag name: $TAG_NAME"
             echo "The tag must follow the pattern: $TAG_PATTERN"
 
-            # Delete the invalid tag using GitHub API
-            curl -X DELETE -H "Authorization: Bearer $GITHUB_TOKEN" \
+            # Delete the invalid tag using GitHub API with PAT
+            curl -X DELETE -H "Authorization: Bearer $PERSONAL_ACCESS_TOKEN" \
               "https://api.github.com/repos/$TARGET_REPO/git/refs/tags/${TAG_NAME}"
 
             exit 1  # Fail the workflow to notify users
