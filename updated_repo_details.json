@@ -1,1 +1,0 @@
-{ "tag_protection": { "ref_type": "tag", "pattern": "release-*", "environment": "Dev" } }
