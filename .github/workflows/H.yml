@@ -1,0 +1,59 @@
+name: Update Deployment Policy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'The environment to update (e.g., production, staging)'
+        required: true
+        default: 'Dev'
+      tag_pattern:
+        description: 'The tag pattern to deploy (e.g., v*, release/*)'
+        required: true
+        default: 'v*'
+
+jobs:
+  update_deployment_policy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up GitHub Token
+        run: echo "GH_TOKEN=${{ secrets.PERSONAL_ACCESS_TOKEN }}" >> $GITHUB_ENV
+
+      - name: Fetch existing deployment policy
+        run: |
+          curl -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/saikiranrko/abc/environments/${{ github.event.inputs.environment }} \
+            -o response.json
+          cat response.json
+
+      - name: Update Deployment Policy for Tags
+        run: |
+          tag_pattern="${{ github.event.inputs.tag_pattern }}"
+          environment="${{ github.event.inputs.environment }}"
+          
+          curl -X PATCH \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -d @- https://api.github.com/repos/saikiranrko/abc/environments/$environment \
+            <<EOF
+          {
+            "deployment_branch_policy": {
+              "enabled": true,
+              "branches": [],
+              "tags": [
+                "$tag_pattern"
+              ]
+            }
+          }
+          EOF
+
+      - name: Verify Update
+        run: |
+          curl -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/saikiranrko/abc/environments/${{ github.event.inputs.environment }}
