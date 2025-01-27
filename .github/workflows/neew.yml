@@ -1,26 +1,11 @@
 name: Enforce Tag Pattern for Environment Deployments
 
 on:
-  workflow_dispatch:
-    inputs:
-      repo_name:
-        description: 'Repository name to enforce tag pattern (format: owner/repo)'
-        required: true
-        type: string
-      environment_name:
-        description: 'Environment name to enforce tag pattern'
-        required: true
-        type: string
-      tag_pattern:
-        description: 'Tag pattern to enforce (e.g., v*)'
-        required: true
-        type: string
+  deployment
 
 jobs:
   enforce-tag-pattern:
-    if: >
-      github.event.deployment.environment == '${{ inputs.environment_name }}' &&
-      github.repository == '${{ inputs.repo_name }}'
+    if: github.event.deployment.environment == 'production'  # Replace with your environment name
     runs-on: ubuntu-latest
 
     steps:
@@ -29,7 +14,7 @@ jobs:
 
       - name: Validate tag pattern
         env:
-          TAG_PATTERN: ${{ inputs.tag_pattern }}
+          TAG_PATTERN: 'v*'  # Replace with your desired tag pattern
           DEPLOYMENT_REF: ${{ github.event.deployment.ref }}
         run: |
           # Check if the deployment ref matches the tag pattern
