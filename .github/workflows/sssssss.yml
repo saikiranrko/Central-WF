@@ -35,9 +35,20 @@ jobs:
           echo "Repository: $REPO_NAME"
           echo "Environment: $ENVIRONMENT"
 
-      - name: Add Deployment Rule for Branch
+      - name: Add Deployment Branch Rule using GitHub API
         run: |
-          echo "Adding deployment rule for branch pattern: $BRANCH_PATTERN in repo $REPO_NAME for environment $ENVIRONMENT."
-          # Example of adding a deployment rule for a branch
-          # Insert your deployment rule logic here (e.g., using AWS CLI, GCP CLI, etc.)
-          # This part can involve adding a rule to deploy on any matching branch pattern
+          # Use the GitHub API to update the deployment branches for the environment
+          curl -X PATCH \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            -d @- https://api.github.com/repos/${{ github.repository }}/environments/$ENVIRONMENT \
+            <<EOF
+            {
+              "deployment_branch_policy": {
+                "enabled": true,
+                "branches": [
+                  "$BRANCH_PATTERN"
+                ]
+              }
+            }
+            EOF
