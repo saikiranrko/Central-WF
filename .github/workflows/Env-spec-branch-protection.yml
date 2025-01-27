@@ -1,4 +1,4 @@
-name: Configure Environment Deployment Rules with Tag Protection
+name: Configure Environment Deployment Rules with Tag Protection.
 
 on:
   workflow_dispatch:
