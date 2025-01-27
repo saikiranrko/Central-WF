@@ -36,28 +36,6 @@ jobs:
             exit 0
           fi
 
-      - name: Check Tag Creator
-        run: |
-          # Get the user who created the tag
-          TAG_CREATOR=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/git/${{ github.sha }}" \
-            | jq -r '.author.name')
-          
-          # Get allowed users from repository variable (comma-separated list)
-          ALLOWED_USERS_LIST="${{ vars.ALLOWED_TAG_CREATORS }}"
-          # Convert comma-separated list to JSON array
-          ALLOWED_USERS=$(echo "$ALLOWED_USERS_LIST" | tr ',' '\n' | jq -R . | jq -s .)
-          
-          # Check if the tag creator is in the allowed list
-          if echo "$ALLOWED_USERS" | jq -e --arg USER "$TAG_CREATOR" '. | index($USER)'; then
-            echo "Tag created by authorized user: $TAG_CREATOR"
-          else
-            echo "Unauthorized tag creation by: $TAG_CREATOR"
-            # Delete the unauthorized tag
-            git push origin :refs/tags/${{ github.ref_name }}
-            exit 1
-          fi
-
       - name: Validate Tag Format
         run: |
           # Use input pattern or fall back to repository variable
