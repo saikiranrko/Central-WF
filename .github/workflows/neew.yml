@@ -29,6 +29,9 @@ jobs:
           REPO_NAME: ${{ github.event.inputs.repo_name }}
           ENVIRONMENT_NAME: ${{ github.event.inputs.environment_name }}
           TAG_PATTERN: ${{ github.event.inputs.tag_pattern }}
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}  # Default token provided by GitHub Actions
+          # If using a custom PAT, replace the above line with:
+          # GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
           # Fetch the latest deployment information for the specified environment
           DEPLOYMENT_INFO=$(gh api repos/$REPO_NAME/deployments?environment=$ENVIRONMENT_NAME --jq '.[0]')
