@@ -6,7 +6,7 @@ on:
       repo_name:
         description: 'The name of the repository'
         required: true
-        default: ${{ github.repository }}
+        default: saikiranrko/abc
       tag_pattern:
         description: 'The tag pattern (ref type)'
         required: true
