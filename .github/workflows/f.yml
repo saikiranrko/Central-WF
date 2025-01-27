@@ -1,63 +1,45 @@
-name: Tag Protection
+name: Deploy Tag Rule
 
 on:
   workflow_dispatch:
     inputs:
-      repository:
-        description: 'Target repository (format: owner/repo)'
+      repo_name:
+        description: 'The name of the repository'
         required: true
-        type: string
-      environment:
-        description: 'Environment to apply protection'
-        required: true
-        type: string
+        default: ${{ github.repository }}
       tag_pattern:
-        description: 'Tag pattern (regex)'
+        description: 'The tag pattern (ref type)'
         required: true
-        type: string
-  push:
-    tags:
-      - '*'
+        default: 'v*'  # Default pattern can be all tags starting with "v"
+      environment:
+        description: 'The environment to deploy the tag'
+        required: true
+        default: 'production'
 
 jobs:
-  check-tag:
-    # Use the input environment or fall back to repository variable
-    environment: ${{ github.event.inputs.environment || vars.TAG_PROTECTION_ENV }}
+  add_deployment_rule:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - name: Check Repository
-        run: |
-          # Use input repository or fall back to repository variable
-          TARGET_REPO="${{ github.event.inputs.repository || vars.PROTECTED_REPOSITORY }}"
-          if [ "$TARGET_REPO" != "${{ github.repository }}" ]; then
-            echo "Tag protection not configured for this repository"
-            exit 0
-          fi
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
-      - name: Validate Tag Format
+      - name: Set up GitHub CLI
+        uses: cli/cli@v2
+
+      - name: Create Deployment Rule for Tag
         run: |
-          # Use input pattern or fall back to repository variable
-          TAG_PATTERN="${{ github.event.inputs.tag_pattern || vars.TAG_PATTERN }}"
-          # If still not set, use default pattern
-          if [ -z "$TAG_PATTERN" ]; then
-            TAG_PATTERN='^(v[0-9]+\.[0-9]+\.[0-9]+|release-[0-9]+\.[0-9]+\.[0-9]+)$'
-          fi
+          echo "Creating deployment rule for tag..."
+          TAG_PATTERN="${{ github.event.inputs.tag_pattern }}"  # Dynamic tag pattern
+          ENVIRONMENT="${{ github.event.inputs.environment }}"  # Dynamic environment
+          REPO_NAME="${{ github.event.inputs.repo_name }}"  # Dynamic repo name
           
-          if [[ ${{ github.ref_name }} =~ $TAG_PATTERN ]]; then
-            echo "Tag format is valid: ${{ github.ref_name }}"
-          else
-            echo "Invalid tag format: ${{ github.ref_name }}"
-            git push origin :refs/tags/${{ github.ref_name }}
-            exit 1
-          fi
+          # Use GitHub CLI to create a deployment rule
+          gh api --method POST "/repos/${REPO_NAME}/environments/${ENVIRONMENT}/deployment-branches-and-tags" \
+            -F ref_type="tag" \
+            -F name_pattern="${TAG_PATTERN}" \
+            --header "Accept: application/vnd.github+json"
+        env:
+          PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 
-      - name: Protect Tag
-        run: |
-          # Make the tag immutable using the REST API
-          curl -X POST \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/tags/${{ github.ref_name }}/protection" \
-            -d '{"enabled": true}'
+      - name: Confirm deployment rule
+        run: echo "Deployment rule for tag pattern '${TAG_PATTERN}' has been successfully added to environment '${ENVIRONMENT}'!"
