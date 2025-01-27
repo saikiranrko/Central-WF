@@ -1,4 +1,4 @@
-name: Add Deployment Tag Rule
+name: Add Deployment Tag Rule.
 
 on:
   workflow_dispatch:
