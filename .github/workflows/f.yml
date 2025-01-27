@@ -6,7 +6,7 @@ on:
       repo_name:
         description: 'The name of the repository'
         required: true
-        default: saikiranrko/abc
+        default: ${{ github.repository }}
       tag_pattern:
         description: 'The tag pattern (ref type)'
         required: true
@@ -26,9 +26,15 @@ jobs:
       - name: Create Deployment Rule for Tag
         run: |
           echo "Creating deployment rule for tag..."
+          
           TAG_PATTERN="${{ github.event.inputs.tag_pattern }}"  # Dynamic tag pattern
           ENVIRONMENT="${{ github.event.inputs.environment }}"  # Dynamic environment
           REPO_NAME="${{ github.event.inputs.repo_name }}"  # Dynamic repo name
+
+          # Verify inputs before making the API call
+          echo "Using tag pattern: $TAG_PATTERN"
+          echo "Using environment: $ENVIRONMENT"
+          echo "Using repo name: $REPO_NAME"
           
           # Use curl to make the API request to GitHub
           curl -X POST \
