@@ -1,11 +1,23 @@
 name: Enforce Tag Pattern for Environment Deployments
 
 on:
-  deployment
+  workflow_dispatch:
+    inputs:
+      repo_name:
+        description: 'Repository name (format: owner/repo)'
+        required: true
+        type: string
+      environment_name:
+        description: 'Environment name to enforce tag pattern'
+        required: true
+        type: string
+      tag_pattern:
+        description: 'Tag pattern to enforce (e.g., v*)'
+        required: true
+        type: string
 
 jobs:
   enforce-tag-pattern:
-    if: github.event.deployment.environment == 'production'  # Replace with your environment name
     runs-on: ubuntu-latest
 
     steps:
@@ -14,12 +26,20 @@ jobs:
 
       - name: Validate tag pattern
         env:
-          TAG_PATTERN: 'v*'  # Replace with your desired tag pattern
-          DEPLOYMENT_REF: ${{ github.event.deployment.ref }}
+          REPO_NAME: ${{ github.event.inputs.repo_name }}
+          ENVIRONMENT_NAME: ${{ github.event.inputs.environment_name }}
+          TAG_PATTERN: ${{ github.event.inputs.tag_pattern }}
         run: |
+          # Fetch the latest deployment information for the specified environment
+          DEPLOYMENT_INFO=$(gh api repos/$REPO_NAME/deployments?environment=$ENVIRONMENT_NAME --jq '.[0]')
+
+          # Extract the deployment ref (tag or branch)
+          DEPLOYMENT_REF=$(echo $DEPLOYMENT_INFO | jq -r '.ref')
+
           # Check if the deployment ref matches the tag pattern
           if [[ ! "$DEPLOYMENT_REF" =~ $TAG_PATTERN ]]; then
             echo "Deployment ref '$DEPLOYMENT_REF' does not match the required tag pattern '$TAG_PATTERN'"
             exit 1
+          else
+            echo "Deployment ref '$DEPLOYMENT_REF' matches the required tag pattern '$TAG_PATTERN'"
           fi
-          echo "Deployment ref '$DEPLOYMENT_REF' matches the required tag pattern '$TAG_PATTERN'"
