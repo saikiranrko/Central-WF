@@ -6,7 +6,7 @@ on:
       repo_name:
         description: 'The name of the repository'
         required: true
-        default: saikiranrko/abc
+        default: ${{ github.repository }}
       tag_pattern:
         description: 'The tag pattern (ref type)'
         required: true
@@ -23,9 +23,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: Set up GitHub CLI
-        uses: cli/cli@v2
-
       - name: Create Deployment Rule for Tag
         run: |
           echo "Creating deployment rule for tag..."
@@ -33,11 +30,13 @@ jobs:
           ENVIRONMENT="${{ github.event.inputs.environment }}"  # Dynamic environment
           REPO_NAME="${{ github.event.inputs.repo_name }}"  # Dynamic repo name
           
-          # Use GitHub CLI to create a deployment rule
-          gh api --method POST "/repos/${REPO_NAME}/environments/${ENVIRONMENT}/deployment-branches-and-tags" \
-            -F ref_type="tag" \
-            -F name_pattern="${TAG_PATTERN}" \
-            --header "Accept: application/vnd.github+json"
+          # Use curl to make the API request to GitHub
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            -d '{"ref_type": "tag", "name_pattern": "'"${TAG_PATTERN}"'"}' \
+            "https://api.github.com/repos/${REPO_NAME}/environments/${ENVIRONMENT}/deployment-branches-and-tags"
+          
         env:
           PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 
