@@ -1,0 +1,68 @@
+name: Dynamic Deployment Rule
+
+on:
+  workflow_dispatch:  # Allows for manual triggering of the workflow with inputs
+    inputs:
+      branch_pattern:
+        description: 'The branch pattern (e.g., "main", "dev", "feature/*")'
+        required: true
+        default: 'main'
+      tag_pattern:
+        description: 'The tag pattern (e.g., "v*", "release/*")'
+        required: true
+        default: 'v*'
+      repo_name:
+        description: 'Repository name (e.g., "user/repo")'
+        required: true
+      environment:
+        description: 'Deployment environment (e.g., "production", "staging")'
+        required: true
+        default: 'production'
+
+jobs:
+  add-deployment-rule:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up environment variables
+        run: |
+          echo "BRANCH_PATTERN=${{ github.event.inputs.branch_pattern }}" >> $GITHUB_ENV
+          echo "TAG_PATTERN=${{ github.event.inputs.tag_pattern }}" >> $GITHUB_ENV
+          echo "REPO_NAME=${{ github.event.inputs.repo_name }}" >> $GITHUB_ENV
+          echo "ENVIRONMENT=${{ github.event.inputs.environment }}" >> $GITHUB_ENV
+
+      - name: Display Variables
+        run: |
+          echo "Branch Pattern: $BRANCH_PATTERN"
+          echo "Tag Pattern: $TAG_PATTERN"
+          echo "Repository: $REPO_NAME"
+          echo "Environment: $ENVIRONMENT"
+
+      - name: Determine if it's a branch or tag
+        id: determine-type
+        run: |
+          if [[ "$BRANCH_PATTERN" =~ ^refs/heads/.* ]]; then
+            echo "This is a branch deployment."
+            echo "IS_BRANCH=true" >> $GITHUB_ENV
+          elif [[ "$TAG_PATTERN" =~ ^refs/tags/.* ]]; then
+            echo "This is a tag deployment."
+            echo "IS_TAG=true" >> $GITHUB_ENV
+          else
+            echo "Not a valid branch or tag pattern."
+            exit 1
+          fi
+
+      - name: Add Deployment Rule for Branch/Tag
+        run: |
+          if [ "$IS_BRANCH" == "true" ]; then
+            echo "Adding deployment rule for branch pattern: $BRANCH_PATTERN in repo $REPO_NAME for environment $ENVIRONMENT."
+            # Example of adding a deployment rule for a branch
+            # Insert your deployment rule logic here
+          elif [ "$IS_TAG" == "true" ]; then
+            echo "Adding deployment rule for tag pattern: $TAG_PATTERN in repo $REPO_NAME for environment $ENVIRONMENT."
+            # Example of adding a deployment rule for a tag
+            # Insert your deployment rule logic here
+          fi
