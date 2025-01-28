@@ -1,4 +1,4 @@
-name: Add Protection and Deploy.
+name: Add Protection and Deploy
 
 on:
   workflow_dispatch:
@@ -33,18 +33,23 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.PAT }}
         run: |
+          set -e  # Exit immediately if any command fails
+
+          # Input variables
           REPO_NAME="${{ github.event.inputs.repo_name }}"
           PATTERN="${{ github.event.inputs.pattern }}"
           TYPE="${{ github.event.inputs.type }}"
           ENVIRONMENT="${{ github.event.inputs.environment }}"
 
-          # Set API URL
+          # GitHub API URL for deployment branch/tag policies
           API_URL="https://api.github.com/repos/${REPO_NAME}/environments/${ENVIRONMENT}/deployment-branch-policies"
+
+          echo "🔍 Inputs: Repository=${REPO_NAME}, Pattern=${PATTERN}, Type=${TYPE}, Environment=${ENVIRONMENT}"
 
           # Conditional API call for branch or tag protection
           if [ "$TYPE" = "branch" ]; then
-            echo "Adding branch protection for pattern: $PATTERN"
-            RESPONSE=$(curl -L -s -o /dev/null -w "%{http_code}" \
+            echo "🚀 Adding branch protection for pattern: $PATTERN"
+            RESPONSE=$(curl -s -w "%{http_code}" -o response.json \
               -X POST \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer $GITHUB_TOKEN" \
@@ -57,11 +62,12 @@ jobs:
               echo "✅ Successfully added branch protection for pattern: $PATTERN"
             else
               echo "❌ Failed to add branch protection. HTTP Status: $RESPONSE"
+              echo "Response body: $(cat response.json)"
               exit 1
             fi
           elif [ "$TYPE" = "tag" ]; then
-            echo "Adding tag protection for pattern: $PATTERN"
-            RESPONSE=$(curl -L -s -o /dev/null -w "%{http_code}" \
+            echo "🚀 Adding tag protection for pattern: $PATTERN"
+            RESPONSE=$(curl -s -w "%{http_code}" -o response.json \
               -X POST \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer $GITHUB_TOKEN" \
@@ -75,6 +81,7 @@ jobs:
               echo "✅ Successfully added tag protection for pattern: $PATTERN"
             else
               echo "❌ Failed to add tag protection. HTTP Status: $RESPONSE"
+              echo "Response body: $(cat response.json)"
               exit 1
             fi
           else
