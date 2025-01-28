@@ -60,6 +60,10 @@ jobs:
             -H "X-GitHub-Api-Version: 2022-11-28" \
             $API_URL)
 
+          # Log the raw API response for debugging
+          echo "Raw API Response:"
+          echo "$EXISTING_PATTERNS" | jq .
+
           if [ -z "$EXISTING_PATTERNS" ]; then
             echo "❌ Failed to fetch existing policies. Response: $EXISTING_PATTERNS"
             exit 1
@@ -69,7 +73,7 @@ jobs:
           if [ "$TYPE" = "Branch" ]; then
             echo "Checking if branch pattern '${PATTERN}' already exists..."
             BRANCH_EXISTS=$(echo "$EXISTING_PATTERNS" | jq -r --arg pattern "$ESCAPED_PATTERN" \
-              '.branch_policies[]? | select(.name | test("^" + $pattern + "$")) | .name' || echo "")
+              '.branch_policies[]? | select(.name == $pattern) | .name' || echo "")
 
             if [ "$BRANCH_EXISTS" = "$PATTERN" ]; then
               echo "⚠️ Branch pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'."
@@ -79,7 +83,7 @@ jobs:
           elif [ "$TYPE" = "Tag" ]; then
             echo "Checking if tag pattern '${PATTERN}' already exists..."
             TAG_EXISTS=$(echo "$EXISTING_PATTERNS" | jq -r --arg pattern "$ESCAPED_PATTERN" \
-              '.tag_policies[]? | select(.name | test("^" + $pattern + "$")) | .name' || echo "")
+              '.tag_policies[]? | select(.name == $pattern) | .name' || echo "")
 
             if [ "$TAG_EXISTS" = "$PATTERN" ]; then
               echo "⚠️ Tag pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'."
