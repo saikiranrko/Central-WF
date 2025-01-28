@@ -1,8 +1,62 @@
+name: Add Protection and Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo_name:
+        description: 'Repository name (e.g., owner/repo)'
+        required: true
+      pattern:
+        description: 'Branch or tag pattern to protect (e.g., v* or main)'
+        required: true
+      type:
+        description: 'Type of protection (branch or tag)'
+        required: true
+        type: choice
+        options:
+          - branch
+          - tag
+      environment:
+        description: 'Environment name for deployment'
+        required: true
+      # Additional dynamic inputs
+      dynamic_inputs:
+        description: 'Dynamic JSON inputs for extra configurations (optional)'
+        required: false
+        default: '{}'
+
+jobs:
+  add_protection:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up job
+        id: setup
+        run: echo "Starting protection configuration"
+
+      - name: Install jq
+        run: sudo apt-get install jq -y
+
+      - name: Parse Dynamic Inputs
+        id: parse_inputs
+        run: |
+          set -e
+          DYNAMIC_INPUTS='${{ github.event.inputs.dynamic_inputs }}'
+          echo "Parsing dynamic inputs..."
+          if [ -n "$DYNAMIC_INPUTS" ] && [ "$DYNAMIC_INPUTS" != "{}" ]; then
+            echo "Dynamic inputs provided: $DYNAMIC_INPUTS"
+          else
+            echo "No dynamic inputs provided."
+          fi
+          # Export parsed values (if any) for further steps
+          echo "DYNAMIC_INPUTS=$DYNAMIC_INPUTS" >> $GITHUB_ENV
+
       - name: Add protection
         env:
           GITHUB_TOKEN: ${{ secrets.PAT }}
+          DYNAMIC_INPUTS: ${{ env.DYNAMIC_INPUTS }}
         run: |
-          set -e  # Exit immediately if any command fails
+          set -e
           
           # Input variables
           REPO_NAME="${{ github.event.inputs.repo_name }}"
