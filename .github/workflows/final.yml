@@ -44,103 +44,74 @@ jobs:
           TYPE="${{ github.event.inputs.type }}"
           ENVIRONMENT="${{ github.event.inputs.environment }}"
 
-          # URL encode the environment name and pattern
-          ENCODED_ENV=$(echo "$ENVIRONMENT" | jq -sRr @uri)
-          ENCODED_PATTERN=$(echo "$PATTERN" | jq -sRr @uri)
-
-          # GitHub API URL with encoded environment name
-          API_URL="https://api.github.com/repos/${REPO_NAME}/environments/${ENCODED_ENV}/deployment-branch-policies"
+          # GitHub API URL
+          API_URL="https://api.github.com/repos/${REPO_NAME}/environments/${ENVIRONMENT}/deployment-branch-policies"
 
           echo "🔍 Inputs: Repository=${REPO_NAME}, Pattern=${PATTERN}, Type=${TYPE}, Environment=${ENVIRONMENT}"
 
-          # Function to handle errors
-          handle_error() {
-            local status=$1
-            local response=$2
-            local operation=$3
-            
-            echo "❌ Error during ${operation}. HTTP Status: ${status}"
-            echo "Response body: ${response}"
-            
-            # Parse error message if possible
-            local error_msg=$(echo "${response}" | jq -r '.message // "Unknown error"')
-            echo "Error message: ${error_msg}"
-            
-            case $status in
-              401) echo "Authentication failed. Please check your PAT token." ;;
-              403) echo "Permission denied. Ensure your PAT token has the required permissions." ;;
-              404) echo "Resource not found. Check if the repository and environment exist." ;;
-              422) echo "Validation failed. Check your input parameters." ;;
-              *) echo "Unexpected error occurred." ;;
-            esac
-            
-            exit 1
-          }
-
           # Fetch existing policies
           echo "Fetching existing deployment branch/tag policies..."
-          EXISTING_RESPONSE=$(curl -s -w "HTTPSTATUS:%{http_code}" \
+          EXISTING_PATTERNS=$(curl -s \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "$API_URL")
-          
-          EXISTING_BODY=$(echo "$EXISTING_RESPONSE" | sed -e 's/HTTPSTATUS\:.*//g')
-          EXISTING_STATUS=$(echo "$EXISTING_RESPONSE" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
-
-          if [ $EXISTING_STATUS -ne 200 ]; then
-            handle_error "$EXISTING_STATUS" "$EXISTING_BODY" "fetching existing policies"
-          fi
+            $API_URL)
 
           if [ "$TYPE" = "branch" ]; then
             echo "Checking if branch pattern '${PATTERN}' already exists..."
-            BRANCH_EXISTS=$(echo "$EXISTING_BODY" | jq -r --arg pattern "$PATTERN" \
-              '.branch_policies[]? | select(.name == $pattern) | .name')
-            
+            BRANCH_EXISTS=$(echo "$EXISTING_PATTERNS" | jq -e --arg pattern "$PATTERN" \
+              '.branch_policies[]? | select(.name == $pattern) | .name' || echo "")
             if [ "$BRANCH_EXISTS" = "$PATTERN" ]; then
               echo "⚠️ Branch pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'. No action needed."
               exit 0
             fi
-
             echo "🚀 Adding branch protection for pattern: $PATTERN"
-            RESPONSE=$(curl -s -w "HTTPSTATUS:%{http_code}" \
+            RESPONSE=$(curl -s -w "%{http_code}" -o response.json \
               -X POST \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer $GITHUB_TOKEN" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              "$API_URL" \
-              -d "{\"name\": \"${PATTERN}\"}")
+              $API_URL \
+              -d "{
+                    \"name\": \"${PATTERN}\"
+                  }")
+            if [ "$RESPONSE" -eq 201 ]; then
+              echo "✅ Successfully added branch protection for pattern: $PATTERN"
+            else
+              echo "❌ Failed to add branch protection. HTTP Status: $RESPONSE"
+              echo "Response body: $(cat response.json)"
+              exit 1
+            fi
 
           elif [ "$TYPE" = "tag" ]; then
             echo "Checking if tag pattern '${PATTERN}' already exists..."
-            TAG_EXISTS=$(echo "$EXISTING_BODY" | jq -r --arg pattern "$PATTERN" \
-              '.tag_policies[]? | select(.name == $pattern) | .name')
-            
+            TAG_EXISTS=$(echo "$EXISTING_PATTERNS" | jq -e --arg pattern "$PATTERN" \
+              '.tag_policies[]? | select(.name == $pattern) | .name' || echo "")
             if [ "$TAG_EXISTS" = "$PATTERN" ]; then
               echo "⚠️ Tag pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'. No action needed."
               exit 0
             fi
-
             echo "🚀 Adding tag protection for pattern: $PATTERN"
-            RESPONSE=$(curl -s -w "HTTPSTATUS:%{http_code}" \
+            RESPONSE=$(curl -s -w "%{http_code}" -o response.json \
               -X POST \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer $GITHUB_TOKEN" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              "$API_URL" \
-              -d "{\"name\": \"${PATTERN}\", \"type\": \"tag\"}")
+              $API_URL \
+              -d "{
+                    \"name\": \"${PATTERN}\",
+                    \"type\": \"tag\"
+                  }")
+            if [ "$RESPONSE" -eq 201 ]; then
+              echo "✅ Successfully added tag protection for pattern: $PATTERN"
+            else
+              echo "❌ Failed to add tag protection. HTTP Status: $RESPONSE"
+              echo "Response body: $(cat response.json)"
+              exit 1
+            fi
           else
             echo "❌ Invalid type specified: $TYPE. Use 'branch' or 'tag'."
             exit 1
-          fi
-
-          BODY=$(echo "$RESPONSE" | sed -e 's/HTTPSTATUS\:.*//g')
-          STATUS=$(echo "$RESPONSE" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
-
-          if [ $STATUS -eq 200 ]; then
-            echo "✅ Successfully added ${TYPE} protection for pattern: $PATTERN"
-          else
-            handle_error "$STATUS" "$BODY" "adding ${TYPE} protection"
           fi
 
       - name: Confirmation
