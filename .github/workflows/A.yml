@@ -86,7 +86,7 @@ jobs:
                     \"name\": \"${ESCAPED_PATTERN}\"
                   }")
             HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-            if [ "$HTTP_CODE" -eq 201 ]; then
+            if [ "$HTTP_CODE" -eq 200 ]; then
               echo "✅ Successfully added branch protection for pattern: $PATTERN"
             else
               echo "❌ Failed to add branch protection. HTTP Status: $HTTP_CODE"
@@ -116,7 +116,7 @@ jobs:
                     \"type\": \"tag\"
                   }")
             HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-            if [ "$HTTP_CODE" -eq 201 ]; then
+            if [ "$HTTP_CODE" -eq 200 ]; then
               echo "✅ Successfully added tag protection for pattern: $PATTERN"
             else
               echo "❌ Failed to add tag protection. HTTP Status: $HTTP_CODE"
