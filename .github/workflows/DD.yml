@@ -24,7 +24,7 @@ jobs:
 
       - name: Add tag protection
         env:
-          GITHUB_TOKEN: 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 
+          GITHUB_TOKEN: ${{ secrets.PAT }} # Use your custom token
           REPO_NAME: ${{ github.event.inputs.repo_name }}
           TAG_PATTERN: ${{ github.event.inputs.tag_pattern }}
           ENVIRONMENT: ${{ github.event.inputs.environment }}
