@@ -55,26 +55,31 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            $API_URL)
+            "$API_URL")
 
           if [ "$TYPE" = "branch" ]; then
             echo "Checking if branch pattern '${PATTERN}' already exists..."
             BRANCH_EXISTS=$(echo "$EXISTING_PATTERNS" | jq -e --arg pattern "$PATTERN" \
               '.branch_policies[]? | select(.name == $pattern) | .name' || echo "")
-            if [ "$BRANCH_EXISTS" = "$PATTERN" ]; then
+            if [ "$BRANCH_EXISTS" = "\"$PATTERN\"" ]; then
               echo "⚠️ Branch pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'. No action needed."
               exit 0
             fi
+
             echo "🚀 Adding branch protection for pattern: $PATTERN"
             RESPONSE=$(curl -s -w "%{http_code}" -o response.json \
               -X POST \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer $GITHUB_TOKEN" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              $API_URL \
-              -d "{
-                    \"name\": \"${PATTERN}\"
-                  }")
+              "$API_URL" \
+              -d @- <<EOF
+              {
+                "name": "$PATTERN"
+              }
+            EOF
+            )
+
             if [ "$RESPONSE" -eq 200 ]; then
               echo "✅ Successfully added branch protection for pattern: $PATTERN"
             else
@@ -87,21 +92,26 @@ jobs:
             echo "Checking if tag pattern '${PATTERN}' already exists..."
             TAG_EXISTS=$(echo "$EXISTING_PATTERNS" | jq -e --arg pattern "$PATTERN" \
               '.tag_policies[]? | select(.name == $pattern) | .name' || echo "")
-            if [ "$TAG_EXISTS" = "$PATTERN" ]; then
+            if [ "$TAG_EXISTS" = "\"$PATTERN\"" ]; then
               echo "⚠️ Tag pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'. No action needed."
               exit 0
             fi
+
             echo "🚀 Adding tag protection for pattern: $PATTERN"
             RESPONSE=$(curl -s -w "%{http_code}" -o response.json \
               -X POST \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer $GITHUB_TOKEN" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              $API_URL \
-              -d "{
-                    \"name\": \"${PATTERN}\",
-                    \"type\": \"tag\"
-                  }")
+              "$API_URL" \
+              -d @- <<EOF
+              {
+                "name": "$PATTERN",
+                "type": "tag"
+              }
+            EOF
+            )
+
             if [ "$RESPONSE" -eq 200 ]; then
               echo "✅ Successfully added tag protection for pattern: $PATTERN"
             else
@@ -109,6 +119,7 @@ jobs:
               echo "Response body: $(cat response.json)"
               exit 1
             fi
+
           else
             echo "❌ Invalid type specified: $TYPE. Use 'branch' or 'tag'."
             exit 1
