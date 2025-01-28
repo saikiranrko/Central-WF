@@ -14,7 +14,7 @@ environment = os.getenv('ENVIRONMENT')
 
 # GitHub login credentials (Use PAT as password)
 github_username = 'saikiranrko'  # Replace with your username or use secrets
-github_password = sai@96037
+github_password = "sai@96037"
 
 # Configure WebDriver (using ChromeDriver)
 options = webdriver.ChromeOptions()
