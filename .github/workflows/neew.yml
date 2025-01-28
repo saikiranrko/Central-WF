@@ -1,4 +1,4 @@
-name: Add Tag Protection
+name: Add Tag Protection.
 on:
   workflow_dispatch:
     inputs:
