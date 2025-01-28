@@ -75,7 +75,7 @@ jobs:
               -d "{
                     \"name\": \"${PATTERN}\"
                   }")
-            if [ "$RESPONSE" -eq 201 ]; then
+            if [ "$RESPONSE" -eq 200 ]; then
               echo "✅ Successfully added branch protection for pattern: $PATTERN"
             else
               echo "❌ Failed to add branch protection. HTTP Status: $RESPONSE"
@@ -102,7 +102,7 @@ jobs:
                     \"name\": \"${PATTERN}\",
                     \"type\": \"tag\"
                   }")
-            if [ "$RESPONSE" -eq 201 ]; then
+            if [ "$RESPONSE" -eq 200 ]; then
               echo "✅ Successfully added tag protection for pattern: $PATTERN"
             else
               echo "❌ Failed to add tag protection. HTTP Status: $RESPONSE"
