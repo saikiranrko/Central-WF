@@ -54,11 +54,16 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            $API_URL | jq -r '.branch_policies[] | .name, .type' > policies.json
+            $API_URL | jq '.' > policies.json
+
+          # Display the fetched policies for debugging
+          echo "Fetched policies:"
+          cat policies.json
 
           if [ "$TYPE" = "Branch" ]; then
             echo "Checking branch policies..."
-            if grep -q "\"$PATTERN\"" policies.json; then
+            BRANCH_EXISTS=$(jq -r --arg pattern "$PATTERN" '.branch_policies[] | select(.type == "branch" and .name == $pattern)' policies.json)
+            if [ -n "$BRANCH_EXISTS" ]; then
               echo "Branch pattern '$PATTERN' already exists in environment '$ENVIRONMENT'."
               exit 0
             else
@@ -74,7 +79,7 @@ jobs:
 
           elif [ "$TYPE" = "Tag" ]; then
             echo "Checking tag policies..."
-            TAG_EXISTS=$(jq -r '.branch_policies[] | select(.type == "tag" and .name == "'$PATTERN'")' policies.json)
+            TAG_EXISTS=$(jq -r --arg pattern "$PATTERN" '.branch_policies[] | select(.type == "tag" and .name == $pattern)' policies.json)
             if [ -n "$TAG_EXISTS" ]; then
               echo "Tag pattern '$PATTERN' already exists in environment '$ENVIRONMENT'."
               exit 0
