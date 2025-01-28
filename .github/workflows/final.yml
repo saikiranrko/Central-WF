@@ -41,6 +41,7 @@ jobs:
           # Input variables
           REPO_NAME="${{ github.event.inputs.repo_name }}"
           PATTERN="${{ github.event.inputs.pattern }}"
+          ESCAPED_PATTERN=$(printf '%s\n' "${PATTERN}" | sed 's/[][\^$.|?*+(){}]/\\&/g')  # Escape special characters
           TYPE="${{ github.event.inputs.type }}"
           ENVIRONMENT="${{ github.event.inputs.environment }}"
 
@@ -60,7 +61,7 @@ jobs:
           if [ "$TYPE" = "branch" ]; then
             echo "Checking if branch pattern '${PATTERN}' already exists..."
             BRANCH_PATTERNS=$(echo "$EXISTING_PATTERNS" | jq -r '.branch_policies[]?.name // empty')
-            if echo "$BRANCH_PATTERNS" | grep -qx "${PATTERN}"; then
+            if echo "$BRANCH_PATTERNS" | grep -qx "${ESCAPED_PATTERN}"; then
               echo "⚠️ Branch pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'. No action needed."
               exit 0
             fi
@@ -85,7 +86,7 @@ jobs:
           elif [ "$TYPE" = "tag" ]; then
             echo "Checking if tag pattern '${PATTERN}' already exists..."
             TAG_PATTERNS=$(echo "$EXISTING_PATTERNS" | jq -r '.tag_policies[]?.name // empty')
-            if echo "$TAG_PATTERNS" | grep -qx "${PATTERN}"; then
+            if echo "$TAG_PATTERNS" | grep -qx "${ESCAPED_PATTERN}"; then
               echo "⚠️ Tag pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'. No action needed."
               exit 0
             fi
