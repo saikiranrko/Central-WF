@@ -102,7 +102,7 @@ jobs:
                   \"name\": \"${ESCAPED_PATTERN}\"
                 }")
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          if [ "$HTTP_CODE" -eq 201 ]; then
+          if [ "$HTTP_CODE" -eq 200 ]; then
             echo "✅ Successfully added protection for pattern: $PATTERN"
           elif [ "$HTTP_CODE" -eq 303 ]; then
             echo "⚠️ Protection for pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'."
