@@ -46,7 +46,7 @@ jobs:
 
           # Validate pattern for branch/tag names based on GitHub rules
           echo "Validating branch/tag pattern: $PATTERN"
-          if [[ ! "$PATTERN" =~ ^[a-zA-Z0-9/._\-\*]+$ ]]; then
+          if [[ ! "$PATTERN" =~ ^[a-zA-Z0-9/._\-\\*]+$ ]]; then
             echo "❌ Invalid branch/tag pattern: '$PATTERN'. Only alphanumeric characters, '/', '_', '.', '-', and '*' are allowed."
             exit 1
           fi
