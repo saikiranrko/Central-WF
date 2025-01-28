@@ -41,10 +41,22 @@ jobs:
           TYPE="${{ github.event.inputs.type }}"
           ENVIRONMENT="${{ github.event.inputs.environment }}"
 
-          # GitHub API URL for deployment branch/tag policies
+          # GitHub API URLs
           API_URL="https://api.github.com/repos/${REPO_NAME}/environments/${ENVIRONMENT}/deployment-branch-policies"
 
           echo "🔍 Inputs: Repository=${REPO_NAME}, Pattern=${PATTERN}, Type=${TYPE}, Environment=${ENVIRONMENT}"
+
+          # Check if the branch or tag pattern already exists
+          EXISTING_PATTERNS=$(curl -s \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            $API_URL | jq -r '.branch_policies[]?.name, .tag_policies[]?.name // empty')
+
+          if echo "$EXISTING_PATTERNS" | grep -q "^${PATTERN}$"; then
+            echo "⚠️ The pattern '${PATTERN}' already exists for this environment. No action needed."
+            exit 0
+          fi
 
           # Conditional API call for branch or tag protection
           if [ "$TYPE" = "branch" ]; then
