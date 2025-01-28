@@ -2,19 +2,21 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 import time
 import os
 
 # Fetch necessary inputs from environment variables
-github_token = os.getenv('GITHUB_TOKEN')
+github_token = os.getenv('GITHUB_TOKEN')  # Use GitHub secret for PAT
 repo_name = os.getenv('REPO_NAME')
 tag_pattern = os.getenv('TAG_PATTERN')
 environment = os.getenv('ENVIRONMENT')
 
 # GitHub login credentials (Use PAT as password)
-github_username = 'saikiranrko'  # Replace with your username or use secrets
-github_password = "sai@96037"
+github_username = 'saikiranrko'  # Replace with your GitHub username
+github_password = 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  # Assign the GitHub PAT to the password variable
 
 # Configure WebDriver (using ChromeDriver)
 options = webdriver.ChromeOptions()
@@ -34,28 +36,28 @@ driver.find_element(By.ID, 'password').send_keys(github_password)
 driver.find_element(By.NAME, 'commit').click()
 
 # Wait for the login to complete
-time.sleep(5)
+WebDriverWait(driver, 10).until(EC.url_changes('https://github.com/login'))
 
 # Navigate to the repository settings page
 driver.get(f'https://github.com/{repo_name}/settings')
 
 # Wait for the settings page to load
-time.sleep(5)
+WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.PARTIAL_LINK_TEXT, 'Environments')))
 
-# Navigate to the "Environment" settings section
+# Try to find the "Environments" link dynamically using WebDriverWait and partial link text
 driver.find_element(By.PARTIAL_LINK_TEXT, 'Environments').click()
 
 # Wait for the environments page to load
-time.sleep(3)
+WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.LINK_TEXT, environment)))
 
 # Click on the environment to configure
 driver.find_element(By.LINK_TEXT, environment).click()
 
 # Wait for the environment settings page to load
-time.sleep(3)
+WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, 'tagPattern')))  # Adjust as necessary
 
 # Add the tag protection pattern in the environment settings
-tag_input = driver.find_element(By.NAME, 'tagPattern')  # This is hypothetical
+tag_input = driver.find_element(By.NAME, 'tagPattern')  # Adjust the selector if necessary
 tag_input.clear()
 tag_input.send_keys(tag_pattern)
 
