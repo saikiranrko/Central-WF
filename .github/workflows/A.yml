@@ -44,9 +44,15 @@ jobs:
           TYPE="${{ github.event.inputs.type }}"
           ENVIRONMENT="${{ github.event.inputs.environment }}"
 
+          # Validate pattern for branch/tag names based on GitHub rules
+          echo "Validating branch/tag pattern: $PATTERN"
+          if [[ ! "$PATTERN" =~ ^[a-zA-Z0-9/_\.\-]+$ ]]; then
+            echo "❌ Invalid branch/tag pattern: '$PATTERN'. Only alphanumeric characters, '/', '_', '.', and '-' are allowed."
+            exit 1
+          fi
+
           # Escape special characters in the pattern for safe JSON and regex handling
           ESCAPED_PATTERN=$(echo "$PATTERN" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
-          REGEX_SAFE_PATTERN=$(echo "$ESCAPED_PATTERN" | sed 's/[^a-zA-Z0-9-]/\\&/g')
 
           # GitHub API URL
           API_URL="https://api.github.com/repos/${REPO_NAME}/environments/${ENVIRONMENT}/deployment-branch-policies"
@@ -69,7 +75,7 @@ jobs:
           if [ "$TYPE" = "Branch" ]; then
             echo "Checking if branch pattern '${PATTERN}' already exists..."
             BRANCH_EXISTS=$(echo "$EXISTING_PATTERNS" | jq -r --arg pattern "$ESCAPED_PATTERN" \
-              '.branch_policies[]? | select(.name | test("^" + $pattern + "$")) | .name' || echo "")
+              '.branch_policies[]? | select(.name == $pattern) | .name' || echo "")
 
             if [ "$BRANCH_EXISTS" = "$PATTERN" ]; then
               echo "⚠️ Branch pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'."
@@ -79,7 +85,7 @@ jobs:
           elif [ "$TYPE" = "Tag" ]; then
             echo "Checking if tag pattern '${PATTERN}' already exists..."
             TAG_EXISTS=$(echo "$EXISTING_PATTERNS" | jq -r --arg pattern "$ESCAPED_PATTERN" \
-              '.tag_policies[]? | select(.name | test("^" + $pattern + "$")) | .name' || echo "")
+              '.tag_policies[]? | select(.name == $pattern) | .name' || echo "")
 
             if [ "$TAG_EXISTS" = "$PATTERN" ]; then
               echo "⚠️ Tag pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'."
