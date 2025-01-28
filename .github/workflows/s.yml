@@ -75,7 +75,7 @@ jobs:
                 -H "Authorization: Bearer $GITHUB_TOKEN" \
                 -H "X-GitHub-Api-Version: 2022-11-28" \
                 $API_URL \
-                -d "{\"name\":\"$PATTERN\"}"
+                -d "{\"name\":\"$PATTERN\", \"type\":\"branch\"}"
             fi
 
           elif [ "$TYPE" = "Tag" ]; then
@@ -92,7 +92,7 @@ jobs:
                 -H "Authorization: Bearer $GITHUB_TOKEN" \
                 -H "X-GitHub-Api-Version: 2022-11-28" \
                 $API_URL \
-                -d "{\"name\":\"$PATTERN\"}"
+                -d "{\"name\":\"$PATTERN\", \"type\":\"tag\"}"
             fi
 
           else
