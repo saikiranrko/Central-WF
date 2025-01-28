@@ -29,6 +29,9 @@ jobs:
         id: setup
         run: echo "Starting protection configuration"
 
+      - name: Install jq
+        run: sudo apt-get install jq -y
+
       - name: Add protection
         env:
           GITHUB_TOKEN: ${{ secrets.PAT }}
@@ -46,7 +49,7 @@ jobs:
 
           echo "🔍 Inputs: Repository=${REPO_NAME}, Pattern=${PATTERN}, Type=${TYPE}, Environment=${ENVIRONMENT}"
 
-          # Get existing branch or tag patterns
+          # Fetch existing policies
           echo "Fetching existing deployment branch/tag policies..."
           EXISTING_PATTERNS=$(curl -s \
             -H "Accept: application/vnd.github+json" \
@@ -57,7 +60,7 @@ jobs:
           if [ "$TYPE" = "branch" ]; then
             echo "Checking if branch pattern '${PATTERN}' already exists..."
             BRANCH_PATTERNS=$(echo "$EXISTING_PATTERNS" | jq -r '.branch_policies[]?.name // empty')
-            if echo "$BRANCH_PATTERNS" | grep -q "^${PATTERN}$"; then
+            if echo "$BRANCH_PATTERNS" | grep -qx "${PATTERN}"; then
               echo "⚠️ Branch pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'. No action needed."
               exit 0
             fi
@@ -82,7 +85,7 @@ jobs:
           elif [ "$TYPE" = "tag" ]; then
             echo "Checking if tag pattern '${PATTERN}' already exists..."
             TAG_PATTERNS=$(echo "$EXISTING_PATTERNS" | jq -r '.tag_policies[]?.name // empty')
-            if echo "$TAG_PATTERNS" | grep -q "^${PATTERN}$"; then
+            if echo "$TAG_PATTERNS" | grep -qx "${PATTERN}"; then
               echo "⚠️ Tag pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'. No action needed."
               exit 0
             fi
