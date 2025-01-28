@@ -31,7 +31,7 @@ jobs:
 
       - name: Add protection
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT }}
         run: |
           REPO_NAME="${{ github.event.inputs.repo_name }}"
           PATTERN="${{ github.event.inputs.pattern }}"
