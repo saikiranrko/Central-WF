@@ -1,10 +1,16 @@
 const axios = require('axios');
 
 // Fetch environment variables
-const githubToken = process.env.GITHUB_TOKEN;
+const githubToken = process.env.GITHUB_TOKEN;  // Ensure this is correctly set in GitHub Actions Secrets
 const repoName = process.env.REPO_NAME;
 const tagPattern = process.env.TAG_PATTERN;
 const environment = process.env.ENVIRONMENT;
+
+// Check if the token is present
+if (!githubToken) {
+  console.error("Error: GITHUB_TOKEN is not set.");
+  process.exit(1);
+}
 
 const apiUrl = `https://api.github.com/repos/${repoName}/environments/${environment}`;
 
@@ -32,6 +38,7 @@ async function addTagProtection() {
     console.log(response.data);
   } catch (error) {
     console.error("Error adding tag protection:", error.response ? error.response.data : error.message);
+    process.exit(1);  // Exit with error code 1 if there's an issue
   }
 }
 
