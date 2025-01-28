@@ -25,7 +25,7 @@ jobs:
 
       - name: Update environment to allow custom branch policies
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT }}
           ENVIRONMENT: ${{ inputs.environment }}
           REPOSITORY: ${{ inputs.repository }}
         run: |
