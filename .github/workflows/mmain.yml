@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout repository (if needed)
+      # Step 1: Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
@@ -30,15 +30,15 @@ jobs:
         with:
           node-version: '16'
 
-      # Step 3: Install necessary packages (e.g., Axios for API requests)
+      # Step 3: Install Axios for API requests
       - name: Install Axios
         run: |
           npm install axios
 
-      # Step 4: Run a Node.js script to interact with the GitHub API
-      - name: Add tag protection pattern using GitHub API
+      # Step 4: Run Node.js script for adding tag protection
+      - name: Add tag protection pattern
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT}}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN_PAT }}   # Use PAT here
           REPO_NAME: ${{ github.event.inputs.repo_name }}
           TAG_PATTERN: ${{ github.event.inputs.tag_pattern }}
           ENVIRONMENT: ${{ github.event.inputs.environment }}
