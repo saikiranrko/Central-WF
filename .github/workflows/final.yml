@@ -45,7 +45,7 @@ jobs:
           ENVIRONMENT="${{ github.event.inputs.environment }}"
 
           # GitHub API URL
-          API_URL="https://api.github.com/repos/${REPO_NAME}/environments/${ENVIRONMENT}/deployment-branch-policies"
+          API_URL="https://api.github.com/repos/${REPO_NAME}/environments/${ENVIRONMENT}/deployment_protection_rules"
 
           echo "🔍 Inputs: Repository=${REPO_NAME}, Pattern=${PATTERN}, Type=${TYPE}, Environment=${ENVIRONMENT}"
 
@@ -60,14 +60,14 @@ jobs:
           if [ "$TYPE" = "branch" ]; then
             echo "Checking if branch pattern '${PATTERN}' already exists..."
             BRANCH_EXISTS=$(echo "$EXISTING_PATTERNS" | jq -e --arg pattern "$PATTERN" \
-              '.branch_policies[]? | select(.name == $pattern) | .name' || echo "")
+              '.rules[]? | select(.pattern == $pattern and .type == "branch") | .pattern' || echo "")
             if [ "$BRANCH_EXISTS" = "\"$PATTERN\"" ]; then
               echo "⚠️ Branch pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'. No action needed."
               exit 0
             fi
 
             echo "🚀 Adding branch protection for pattern: $PATTERN"
-            RESPONSE=$(curl -s -w "%{http_code}" -o response.json \
+            RESPONSE=$(curl -s -w "%{http_code}" -o /dev/null \
               -X POST \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer $GITHUB_TOKEN" \
@@ -75,30 +75,30 @@ jobs:
               "$API_URL" \
               -d @- <<EOF
               {
-                "name": "$PATTERN"
+                "pattern": "$PATTERN",
+                "type": "branch"
               }
             EOF
             )
 
-            if [ "$RESPONSE" -eq 200 ]; then
+            if [ "$RESPONSE" -eq 201 ]; then
               echo "✅ Successfully added branch protection for pattern: $PATTERN"
             else
               echo "❌ Failed to add branch protection. HTTP Status: $RESPONSE"
-              echo "Response body: $(cat response.json)"
               exit 1
             fi
 
           elif [ "$TYPE" = "tag" ]; then
             echo "Checking if tag pattern '${PATTERN}' already exists..."
             TAG_EXISTS=$(echo "$EXISTING_PATTERNS" | jq -e --arg pattern "$PATTERN" \
-              '.tag_policies[]? | select(.name == $pattern) | .name' || echo "")
+              '.rules[]? | select(.pattern == $pattern and .type == "tag") | .pattern' || echo "")
             if [ "$TAG_EXISTS" = "\"$PATTERN\"" ]; then
               echo "⚠️ Tag pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'. No action needed."
               exit 0
             fi
 
             echo "🚀 Adding tag protection for pattern: $PATTERN"
-            RESPONSE=$(curl -s -w "%{http_code}" -o response.json \
+            RESPONSE=$(curl -s -w "%{http_code}" -o /dev/null \
               -X POST \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer $GITHUB_TOKEN" \
@@ -106,17 +106,16 @@ jobs:
               "$API_URL" \
               -d @- <<EOF
               {
-                "name": "$PATTERN",
+                "pattern": "$PATTERN",
                 "type": "tag"
               }
             EOF
             )
 
-            if [ "$RESPONSE" -eq 200 ]; then
+            if [ "$RESPONSE" -eq 201 ]; then
               echo "✅ Successfully added tag protection for pattern: $PATTERN"
             else
               echo "❌ Failed to add tag protection. HTTP Status: $RESPONSE"
-              echo "Response body: $(cat response.json)"
               exit 1
             fi
 
