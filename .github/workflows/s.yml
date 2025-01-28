@@ -32,7 +32,7 @@ jobs:
       - name: Install jq
         run: sudo apt-get install jq -y
 
-      - name: Fetch existing policies and validate
+      - name: Fetch existing policies and validate inputs
         env:
           GITHUB_TOKEN: ${{ secrets.PAT }}
         run: |
@@ -47,7 +47,7 @@ jobs:
           # GitHub API URL
           API_URL="https://api.github.com/repos/${REPO_NAME}/environments/${ENVIRONMENT}/deployment-branch-policies"
 
-          # Fetch existing policies
+          # Fetch existing policies and save to JSON file
           echo "Fetching existing deployment branch/tag policies..."
           curl -L \
             -X GET \
@@ -60,6 +60,7 @@ jobs:
           echo "Fetched policies:"
           cat policies.json
 
+          # Validate input type and pattern
           if [ "$TYPE" = "Branch" ]; then
             echo "Checking branch policies..."
             BRANCH_EXISTS=$(jq -r --arg pattern "$PATTERN" '.branch_policies[] | select(.type == "branch" and .name == $pattern)' policies.json)
