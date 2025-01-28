@@ -1,4 +1,4 @@
-name: Add Tag Protection and Deploy
+name: Add Tag Protection and Deploy.
 
 on:
   workflow_dispatch:
