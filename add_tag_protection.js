@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 // Fetch environment variables
-const githubToken = process.env.GITHUB_TOKEN;  // Ensure this is correctly set in GitHub Actions Secrets
+const githubToken = process.env.GITHUB_TOKEN;  // Ensure the PAT is passed correctly as an environment variable
 const repoName = process.env.REPO_NAME;
 const tagPattern = process.env.TAG_PATTERN;
 const environment = process.env.ENVIRONMENT;
@@ -22,13 +22,13 @@ async function addTagProtection() {
       'Accept': 'application/vnd.github+json',
     };
 
-    // Define the payload for the environment protection
+    // Define the payload for the environment protection (this part may need adjustment based on API limitations)
     const payload = {
       "deployment_branch_policy": {
         "protected_branches": false,
         "custom_branch_policies": true
       },
-      "tag_pattern": tagPattern // This would ideally be added if supported
+      "tag_pattern": tagPattern  // Note: This may not directly work depending on GitHub's API
     };
 
     // Make API request to create/update environment protection
