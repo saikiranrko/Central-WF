@@ -14,7 +14,7 @@ on:
           - Branch
           - Tag
       pattern:
-        description: 'Branch or tag pattern to protect (e.g., v* or main)'
+        description: 'Pattern to protect (e.g., v* or main)'
         required: true
       environment:
         description: 'Environment name for deployment'
@@ -32,90 +32,88 @@ jobs:
       - name: Install jq
         run: sudo apt-get install jq -y
 
-      - name: Add protection
+      - name: Add branch or tag protection
         env:
           GITHUB_TOKEN: ${{ secrets.PAT }}
         run: |
           set -e  # Exit immediately if any command fails
-
           # Input variables
           REPO_NAME="${{ github.event.inputs.repo_name }}"
           PATTERN="${{ github.event.inputs.pattern }}"
           TYPE="${{ github.event.inputs.type }}"
           ENVIRONMENT="${{ github.event.inputs.environment }}"
-
           # Escape special characters in the pattern for safe JSON and regex handling
           ESCAPED_PATTERN=$(echo "$PATTERN" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
-          REGEX_SAFE_PATTERN=$(echo "$ESCAPED_PATTERN" | sed 's/[^a-zA-Z0-9-]/\\&/g')
-
-          # GitHub API URL
-          API_URL="https://api.github.com/repos/${REPO_NAME}/environments/${ENVIRONMENT}/deployment-branch-policies"
+          # API URLs
+          BRANCH_API_URL="https://api.github.com/repos/${REPO_NAME}/environments/${ENVIRONMENT}/deployment-branch-policies"
+          TAGS_API_URL="https://api.github.com/repos/${REPO_NAME}/git/refs/tags"
           echo "🔍 Inputs: Repository=${REPO_NAME}, Pattern=${PATTERN}, Type=${TYPE}, Environment=${ENVIRONMENT}"
 
-          # Fetch existing policies
-          echo "Fetching existing deployment branch/tag policies..."
-          EXISTING_PATTERNS=$(curl -s \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            $API_URL)
-
-          # Log the raw API response for debugging
-          echo "Raw API Response:"
-          echo "$EXISTING_PATTERNS" | jq .
-
-          if [ -z "$EXISTING_PATTERNS" ]; then
-            echo "❌ Failed to fetch existing policies. Response: $EXISTING_PATTERNS"
-            exit 1
-          fi
-
-          # Check for existing pattern
+          # Branch Protection
           if [ "$TYPE" = "Branch" ]; then
-            echo "Checking if branch pattern '${PATTERN}' already exists..."
-            BRANCH_EXISTS=$(echo "$EXISTING_PATTERNS" | jq -r --arg pattern "$ESCAPED_PATTERN" \
-              '.branch_policies[]? | select(.name == $pattern) | .name' || echo "")
+            echo "Fetching existing branch policies..."
+            EXISTING_BRANCH_POLICIES=$(curl -s \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              $BRANCH_API_URL)
+            if [ -z "$EXISTING_BRANCH_POLICIES" ]; then
+              echo "❌ Failed to fetch existing branch policies."
+              exit 1
+            fi
 
-            if [ "$BRANCH_EXISTS" = "$PATTERN" ]; then
+            echo "Checking if branch pattern '${PATTERN}' already exists..."
+            BRANCH_EXISTS=$(echo "$EXISTING_BRANCH_POLICIES" | jq -r '.branch_policies[]?.name' | grep -E "^${PATTERN}$" || echo "")
+            if [ "$BRANCH_EXISTS" ]; then
               echo "⚠️ Branch pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'."
               exit 0
             fi
 
-          elif [ "$TYPE" = "Tag" ]; then
-            echo "Checking if tag pattern '${PATTERN}' already exists..."
-            TAG_EXISTS=$(echo "$EXISTING_PATTERNS" | jq -r --arg pattern "$ESCAPED_PATTERN" \
-              '.tag_policies[]? | select(.name == $pattern) | .name' || echo "")
+            echo "🚀 Adding branch protection for pattern: $PATTERN"
+            RESPONSE=$(curl -s -w "%{http_code}" -o response.json \
+              -X POST \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              $BRANCH_API_URL \
+              -d "{
+                    \"name\": \"${ESCAPED_PATTERN}\"
+                  }")
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            if [ "$HTTP_CODE" -eq 201 ]; then
+              echo "✅ Successfully added branch protection for pattern: $PATTERN"
+            elif [ "$HTTP_CODE" -eq 422 ]; then
+              echo "⚠️ Branch protection for pattern '${PATTERN}' already exists."
+              exit 0
+            else
+              echo "❌ Failed to add branch protection. HTTP Status: $HTTP_CODE"
+              echo "Response body: $(cat response.json)"
+              exit 1
+            fi
+          fi
 
-            if [ "$TAG_EXISTS" = "$PATTERN" ]; then
-              echo "⚠️ Tag pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'."
+          # Tag Protection
+          if [ "$TYPE" = "Tag" ]; then
+            echo "Fetching existing tags..."
+            EXISTING_TAGS=$(curl -s \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              $TAGS_API_URL)
+            if [ -z "$EXISTING_TAGS" ]; then
+              echo "❌ Failed to fetch existing tags."
+              exit 1
+            fi
+
+            echo "Checking if tag pattern '${PATTERN}' already exists..."
+            TAG_EXISTS=$(echo "$EXISTING_TAGS" | jq -r '.[].ref' | grep -E "refs/tags/${PATTERN}" || echo "")
+            if [ "$TAG_EXISTS" ]; then
+              echo "⚠️ Tag pattern '${PATTERN}' already exists."
               exit 0
             fi
 
-          else
-            echo "❌ Invalid type specified: $TYPE. Use 'Branch' or 'Tag'."
+            echo "🚀 Adding tag protection is not directly supported by GitHub APIs."
+            echo "Please implement manual tag management or consider alternative workflows."
             exit 1
           fi
-
-          echo "🚀 Adding protection for pattern: $PATTERN"
-          RESPONSE=$(curl -s -w "%{http_code}" -o response.json \
-            -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            $API_URL \
-            -d "{
-                  \"name\": \"${ESCAPED_PATTERN}\"
-                }")
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          if [ "$HTTP_CODE" -eq 200 ]; then
-            echo "✅ Successfully added protection for pattern: $PATTERN"
-          elif [ "$HTTP_CODE" -eq 303 ]; then
-            echo "⚠️ Protection for pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'."
-            exit 0
-          else
-            echo "❌ Failed to add protection. HTTP Status: $HTTP_CODE"
-            echo "Response body: $(cat response.json)"
-            exit 1
-          fi
-
       - name: Confirmation
-        run: echo "🎉 Protection has been successfully configured for the repository."
+        run: echo "🎉 Protection configuration process completed successfully."
