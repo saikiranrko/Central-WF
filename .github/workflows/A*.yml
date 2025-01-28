@@ -49,27 +49,27 @@ jobs:
           echo "🔍 Inputs: Repository=${REPO_NAME}, Pattern=${PATTERN}, Type=${TYPE}, Environment=${ENVIRONMENT}"
           # Fetch existing policies
           echo "Fetching existing deployment branch/tag policies..."
-          EXISTING_PATTERNS=$(curl -s \
+          EXISTING_POLICIES=$(curl -s \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             $API_URL)
-          if [ -z "$EXISTING_PATTERNS" ]; then
-            echo "❌ Failed to fetch existing policies. Response: $EXISTING_PATTERNS"
+          if [ -z "$EXISTING_POLICIES" ]; then
+            echo "❌ Failed to fetch existing policies. Response: $EXISTING_POLICIES"
             exit 1
           fi
-          # Check for existing pattern
+          # Validate existing policies based on type
           if [ "$TYPE" = "Branch" ]; then
             echo "Checking if branch pattern '${PATTERN}' already exists..."
-            BRANCH_EXISTS=$(echo "$EXISTING_PATTERNS" | jq -r '.branch_policies[]?.name' | grep -E "^${PATTERN}$" || echo "")
-            if [ "$BRANCH_EXISTS" ]; then
+            BRANCH_PATTERNS=$(echo "$EXISTING_POLICIES" | jq -r '.branch_policies[]?.name' || echo "")
+            if echo "$BRANCH_PATTERNS" | grep -q -E "^${PATTERN}$"; then
               echo "⚠️ Branch pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'."
               exit 0
             fi
           elif [ "$TYPE" = "Tag" ]; then
             echo "Checking if tag pattern '${PATTERN}' already exists..."
-            TAG_EXISTS=$(echo "$EXISTING_PATTERNS" | jq -r '.tag_policies[]?.name' | grep -E "^${PATTERN}$" || echo "")
-            if [ "$TAG_EXISTS" ]; then
+            TAG_PATTERNS=$(echo "$EXISTING_POLICIES" | jq -r '.tag_policies[]?.name' || echo "")
+            if echo "$TAG_PATTERNS" | grep -q -E "^${PATTERN}$"; then
               echo "⚠️ Tag pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'."
               exit 0
             fi
@@ -77,6 +77,7 @@ jobs:
             echo "❌ Invalid type specified: $TYPE. Use 'Branch' or 'Tag'."
             exit 1
           fi
+          # Add protection for the pattern
           echo "🚀 Adding protection for pattern: $PATTERN"
           RESPONSE=$(curl -s -w "%{http_code}" -o response.json \
             -X POST \
