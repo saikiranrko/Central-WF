@@ -46,12 +46,12 @@ jobs:
 
           # Validate pattern for branch/tag names based on GitHub rules
           echo "Validating branch/tag pattern: $PATTERN"
-          if [[ ! "$PATTERN" =~ ^[a-zA-Z0-9/_\.\-]+$ ]]; then
-            echo "❌ Invalid branch/tag pattern: '$PATTERN'. Only alphanumeric characters, '/', '_', '.', and '-' are allowed."
+          if [[ ! "$PATTERN" =~ ^[a-zA-Z0-9/._\-\*]+$ ]]; then
+            echo "❌ Invalid branch/tag pattern: '$PATTERN'. Only alphanumeric characters, '/', '_', '.', '-', and '*' are allowed."
             exit 1
           fi
 
-          # Escape special characters in the pattern for safe JSON and regex handling
+          # Escape special characters in the pattern for safe JSON handling
           ESCAPED_PATTERN=$(echo "$PATTERN" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
 
           # GitHub API URL
@@ -108,7 +108,7 @@ jobs:
                   \"name\": \"${ESCAPED_PATTERN}\"
                 }")
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          if [ "$HTTP_CODE" -eq 200 ]; then
+          if [ "$HTTP_CODE" -eq 201 ]; then
             echo "✅ Successfully added protection for pattern: $PATTERN"
           elif [ "$HTTP_CODE" -eq 303 ]; then
             echo "⚠️ Protection for pattern '${PATTERN}' already exists in environment '${ENVIRONMENT}'."
