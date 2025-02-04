@@ -1,8 +1,7 @@
 import os
 import requests
 
-owner = 'saikiranrko'
-# Replace with your GitHub Token, Org Name, Repo Name, and Environment Name
+# Retrieve environment variables
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 ORG_NAME = os.getenv("ORG_NAME")
 REPO_NAME = os.getenv("REPO_NAME")
@@ -34,7 +33,7 @@ headers = {
 
 # Function to update deployment branch policy
 def update_deployment_branch_policy():
-    url = f"https://api.github.com/repos/{owner}/{repo}/environments/{environment}"
+    url = f"https://api.github.com/repos/{ORG_NAME}/{REPO_NAME}/environments/{ENV_NAME}"
     payload = {
         "deployment_branch_policy": {
             "protected_branches": False,
@@ -44,10 +43,6 @@ def update_deployment_branch_policy():
                 "release-*"
             ]
         }
-    }
-    headers = {
-        "Authorization": f"Bearer {GITHUB_TOKEN}",
-        "Content-Type": "application/json"
     }
     response = requests.put(url, json=payload, headers=headers)
     if response.status_code == 200:
@@ -81,11 +76,6 @@ def create_protection_rule(pattern, reftype):
     }
     if reftype == "tag":
         payload["type"] = "tag"
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "Authorization": f"Bearer {GITHUB_TOKEN}",
-        "Content-Type": "application/json"
-    }
     response = requests.post(url, json=payload, headers=headers, timeout=10)
     if response.status_code == 200:
         print(f"Protection rule created for {reftype}: {pattern}")
