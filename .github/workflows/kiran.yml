@@ -28,7 +28,7 @@ jobs:
       - name: Run script
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ORG_NAME: smera14
+          ORG_NAME: saikiranrko
           REPO_NAME: ${{ secrets.REPO_NAME }}
           ENV_NAME: ${{ secrets.ENV_NAME }}
         run: python tag4.py
