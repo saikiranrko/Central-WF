@@ -1,6 +1,7 @@
 import os
 import requests
 
+owner = 'saikiranrko'
 # Replace with your GitHub Token, Org Name, Repo Name, and Environment Name
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 ORG_NAME = os.getenv("ORG_NAME")
