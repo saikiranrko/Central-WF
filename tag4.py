@@ -33,7 +33,7 @@ headers = {
 
 # Function to update deployment branch policy
 def update_deployment_branch_policy():
-    url = f"https://api.github.com/repos/{owner}/{repo}/environments/{environment}"
+    url = f"https://api.github.com/repos/saikiranrko/{repo}/environments/{environment}"
     payload = {
         "deployment_branch_policy": {
             "protected_branches": False,
