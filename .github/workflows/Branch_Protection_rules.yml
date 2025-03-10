@@ -23,11 +23,12 @@ on:
  
 jobs:
   Add_BRANCH_PROTECTION_RULES:
-    runs-on: [ ubuntu-latest]
+    runs-on: ubuntu-latest
     steps:
     - name: Generate Branch Protection Rules JSON
       id: generate-json
       run: |
+        # Create the JSON and escape it properly for GitHub outputs
         UPDATE_REVIEWERS_COUNT_JSON=$(jq -n --argjson REVIEW_COUNT ${{ github.event.inputs.required_approving_review_count }} \
         '{
             "required_status_checks": null,
@@ -45,7 +46,11 @@ jobs:
             "block_creations": false,
             "required_conversation_resolution": false
         }')
-        echo "PROTECTION_RULES=$UPDATE_REVIEWERS_COUNT_JSON" >> $GITHUB_OUTPUT
+        
+        # Use the correct syntax for GitHub Actions outputs
+        echo "PROTECTION_RULES<<EOF" >> $GITHUB_OUTPUT
+        echo "$UPDATE_REVIEWERS_COUNT_JSON" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
 
     - name: Apply Protection Rule to Specific Branch
       if: ${{ github.event.inputs.useRegexPattern == 'false' }}
