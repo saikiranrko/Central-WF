@@ -20,6 +20,11 @@ on:
         required: true
         default: false
         description: "Enable to use regex pattern matching for branches"
+      isOrgRepo:
+        type: boolean
+        required: true
+        default: false
+        description: "Is this an organization repository (not a personal one)?"
  
 jobs:
   Add_BRANCH_PROTECTION_RULES:
@@ -28,61 +33,149 @@ jobs:
     - name: Generate Branch Protection Rules JSON
       id: generate-json
       run: |
-        # Create the JSON and escape it properly for GitHub outputs
-        UPDATE_REVIEWERS_COUNT_JSON=$(jq -n --argjson REVIEW_COUNT ${{ github.event.inputs.required_approving_review_count }} \
-        '{
-            "required_status_checks": null,
-            "enforce_admins": true,
-            "required_pull_request_reviews":{
-                    "dismissal_restrictions": {},
-                    "dismiss_stale_reviews": false,
-                    "require_code_owner_reviews": true,
-                    "required_approving_review_count": $REVIEW_COUNT
-                    },
-            "restrictions": null,
-            "required_linear_history": false,
-            "allow_force_pushes": false,
-            "allow_deletions": false,
-            "block_creations": false,
-            "required_conversation_resolution": false
-        }')
+        # Create appropriate JSON based on whether this is an org repo or personal repo
+        if [ "${{ github.event.inputs.isOrgRepo }}" = "true" ]; then
+          # JSON for organization repositories (with restrictions)
+          UPDATE_REVIEWERS_COUNT_JSON=$(jq -n --argjson REVIEW_COUNT ${{ github.event.inputs.required_approving_review_count }} \
+          '{
+              "required_status_checks": null,
+              "enforce_admins": true,
+              "required_pull_request_reviews":{
+                      "dismissal_restrictions": {},
+                      "dismiss_stale_reviews": false,
+                      "require_code_owner_reviews": true,
+                      "required_approving_review_count": $REVIEW_COUNT
+                      },
+              "restrictions": null,
+              "required_linear_history": false,
+              "allow_force_pushes": false,
+              "allow_deletions": false,
+              "block_creations": false,
+              "required_conversation_resolution": false
+          }')
+        else
+          # JSON for personal repositories (without restrictions)
+          UPDATE_REVIEWERS_COUNT_JSON=$(jq -n --argjson REVIEW_COUNT ${{ github.event.inputs.required_approving_review_count }} \
+          '{
+              "required_status_checks": null,
+              "enforce_admins": true,
+              "required_pull_request_reviews":{
+                      "dismiss_stale_reviews": false,
+                      "require_code_owner_reviews": true,
+                      "required_approving_review_count": $REVIEW_COUNT
+                      },
+              "required_linear_history": false,
+              "allow_force_pushes": false,
+              "allow_deletions": false,
+              "block_creations": false,
+              "required_conversation_resolution": false
+          }')
+        fi
         
         # Use the correct syntax for GitHub Actions outputs
         echo "PROTECTION_RULES<<EOF" >> $GITHUB_OUTPUT
         echo "$UPDATE_REVIEWERS_COUNT_JSON" >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
 
-    - name: Apply Protection Rule to Specific Branch
+    - name: Verify Branch Exists Before Applying Protection (Single Branch)
       if: ${{ github.event.inputs.useRegexPattern == 'false' }}
+      id: verify-branch
+      run: |
+        echo "Verifying branch exists: ${{ github.event.inputs.branchPattern }} in repository ${{ github.event.inputs.repository }}"
+        
+        # Check if branch exists
+        BRANCH_RESPONSE=$(curl -s -o response.json -w "%{http_code}" -H "Accept: application/vnd.github+json" \
+          -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+          "https://api.github.com/repos/saikiranrko/${{ github.event.inputs.repository }}/branches/${{ github.event.inputs.branchPattern }}")
+        
+        # Display response for debugging
+        echo "HTTP Response Code: $BRANCH_RESPONSE"
+        if [ "$BRANCH_RESPONSE" = "200" ]; then
+          echo "Branch exists, will apply protection."
+          echo "BRANCH_EXISTS=true" >> $GITHUB_OUTPUT
+        else
+          echo "Branch not found. Check branch name and repository."
+          cat response.json
+          echo "BRANCH_EXISTS=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Apply Protection Rule to Specific Branch
+      if: ${{ github.event.inputs.useRegexPattern == 'false' && steps.verify-branch.outputs.BRANCH_EXISTS == 'true' }}
       run: |
         echo "Adding Branch protection rules to repository - ${{ github.event.inputs.repository }} for branch ${{ github.event.inputs.branchPattern }}"
-        curl -L \
+        
+        PROTECT_RESPONSE=$(curl -s -o protect_response.json -w "%{http_code}" -L \
         -X PUT \
         -H "Accept: application/vnd.github+json" \
         -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
         "https://api.github.com/repos/saikiranrko/${{ github.event.inputs.repository }}/branches/${{ github.event.inputs.branchPattern }}/protection" \
-        -d '${{ steps.generate-json.outputs.PROTECTION_RULES }}'
+        -d '${{ steps.generate-json.outputs.PROTECTION_RULES }}')
+        
+        if [ "$PROTECT_RESPONSE" = "200" ] || [ "$PROTECT_RESPONSE" = "201" ]; then
+          echo "Successfully applied protection to branch: ${{ github.event.inputs.branchPattern }}"
+        else
+          echo "Failed to apply protection. Response code: $PROTECT_RESPONSE"
+          cat protect_response.json
+          exit 1
+        fi
 
     - name: Fetch All Branches and Apply Pattern Protection
       if: ${{ github.event.inputs.useRegexPattern == 'true' }}
       run: |
         echo "Fetching branches from repository - ${{ github.event.inputs.repository }}"
         # Get all branches
-        BRANCHES=$(curl -L \
+        BRANCH_RESPONSE=$(curl -s -o response.json -w "%{http_code}" -L \
         -H "Accept: application/vnd.github+json" \
         -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-        "https://api.github.com/repos/saikiranrko/${{ github.event.inputs.repository }}/branches" \
-        | jq -r '.[].name')
+        "https://api.github.com/repos/saikiranrko/${{ github.event.inputs.repository }}/branches")
+        
+        if [ "$BRANCH_RESPONSE" != "200" ]; then
+          echo "Failed to fetch branches. Response code: $BRANCH_RESPONSE"
+          cat response.json
+          exit 1
+        fi
+        
+        # Extract branch names
+        BRANCHES=$(cat response.json | jq -r '.[].name')
+        
+        # Check if we got any branches
+        if [ -z "$BRANCHES" ]; then
+          echo "No branches found in repository. Check repository name."
+          exit 1
+        fi
+        
+        echo "Found the following branches:"
+        echo "$BRANCHES"
+        
+        # Flag to track if we matched any branches
+        MATCHED_ANY=false
         
         # Filter branches using regex pattern and apply protection rules
         for branch in $BRANCHES; do
           if [[ $branch =~ ${{ github.event.inputs.branchPattern }} ]]; then
             echo "Applying protection rules to matching branch: $branch"
-            curl -L \
+            MATCHED_ANY=true
+            
+            PROTECT_RESPONSE=$(curl -s -o protect_response.json -w "%{http_code}" -L \
             -X PUT \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
             "https://api.github.com/repos/saikiranrko/${{ github.event.inputs.repository }}/branches/$branch/protection" \
-            -d '${{ steps.generate-json.outputs.PROTECTION_RULES }}'
+            -d '${{ steps.generate-json.outputs.PROTECTION_RULES }}')
+            
+            if [ "$PROTECT_RESPONSE" = "200" ] || [ "$PROTECT_RESPONSE" = "201" ]; then
+              echo "Successfully applied protection to branch: $branch"
+            else
+              echo "Failed to apply protection to branch: $branch. Response code: $PROTECT_RESPONSE"
+              cat protect_response.json
+              # Continue with other branches even if one fails
+            fi
           fi
         done
+        
+        if [ "$MATCHED_ANY" = false ]; then
+          echo "No branches matched the pattern: ${{ github.event.inputs.branchPattern }}"
+          echo "Available branches were:"
+          echo "$BRANCHES"
+          exit 1
+        fi
