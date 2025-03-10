@@ -1,0 +1,83 @@
+name: Add Branch Protection Rules to Repository
+on:
+  workflow_dispatch:
+    inputs: 
+      repository:
+        type: string
+        required: true
+        description: "Repository name to add branch protection rules to"
+      branchPattern:
+        type: string
+        required: true
+        description: "Branch name or pattern (supports regex for multiple branches)"
+      required_approving_review_count:
+        type: number
+        required: false
+        default: 0
+        description: "Number of required approving reviews"
+      useRegexPattern:
+        type: boolean
+        required: true
+        default: false
+        description: "Enable to use regex pattern matching for branches"
+ 
+jobs:
+  Add_BRANCH_PROTECTION_RULES:
+    runs-on: [ ubuntu-latest]
+    steps:
+    - name: Generate Branch Protection Rules JSON
+      id: generate-json
+      run: |
+        UPDATE_REVIEWERS_COUNT_JSON=$(jq -n --argjson REVIEW_COUNT ${{ github.event.inputs.required_approving_review_count }} \
+        '{
+            "required_status_checks": null,
+            "enforce_admins": true,
+            "required_pull_request_reviews":{
+                    "dismissal_restrictions": {},
+                    "dismiss_stale_reviews": false,
+                    "require_code_owner_reviews": true,
+                    "required_approving_review_count": $REVIEW_COUNT
+                    },
+            "restrictions": null,
+            "required_linear_history": false,
+            "allow_force_pushes": false,
+            "allow_deletions": false,
+            "block_creations": false,
+            "required_conversation_resolution": false
+        }')
+        echo "PROTECTION_RULES=$UPDATE_REVIEWERS_COUNT_JSON" >> $GITHUB_OUTPUT
+
+    - name: Apply Protection Rule to Specific Branch
+      if: ${{ github.event.inputs.useRegexPattern == 'false' }}
+      run: |
+        echo "Adding Branch protection rules to repository - ${{ github.event.inputs.repository }} for branch ${{ github.event.inputs.branchPattern }}"
+        curl -L \
+        -X PUT \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+        "https://api.github.com/repos/albertsons/${{ github.event.inputs.repository }}/branches/${{ github.event.inputs.branchPattern }}/protection" \
+        -d '${{ steps.generate-json.outputs.PROTECTION_RULES }}'
+
+    - name: Fetch All Branches and Apply Pattern Protection
+      if: ${{ github.event.inputs.useRegexPattern == 'true' }}
+      run: |
+        echo "Fetching branches from repository - ${{ github.event.inputs.repository }}"
+        # Get all branches
+        BRANCHES=$(curl -L \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+        "https://api.github.com/repos/albertsons/${{ github.event.inputs.repository }}/branches" \
+        | jq -r '.[].name')
+        
+        # Filter branches using regex pattern and apply protection rules
+        for branch in $BRANCHES; do
+          if [[ $branch =~ ${{ github.event.inputs.branchPattern }} ]]; then
+            echo "Applying protection rules to matching branch: $branch"
+            curl -L \
+            -X PUT \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+            "https://api.github.com/repos/albertsons/${{ github.event.inputs.repository }}/branches/$branch/protection" \
+            -d '${{ steps.generate-json.outputs.PROTECTION_RULES }}'
+          fi
+        done
