@@ -12,8 +12,8 @@ on:
         description: "Branch name or pattern (supports regex for multiple branches)"
       required_approving_review_count:
         type: number
-        required: false
-        default: 0
+        required: true
+        default: 1
         description: "Number of required approving reviews"
       useRegexPattern:
         type: boolean
@@ -55,7 +55,7 @@ jobs:
         -X PUT \
         -H "Accept: application/vnd.github+json" \
         -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-        "https://api.github.com/repos/albertsons/${{ github.event.inputs.repository }}/branches/${{ github.event.inputs.branchPattern }}/protection" \
+        "https://api.github.com/repos/saikiranrko/${{ github.event.inputs.repository }}/branches/${{ github.event.inputs.branchPattern }}/protection" \
         -d '${{ steps.generate-json.outputs.PROTECTION_RULES }}'
 
     - name: Fetch All Branches and Apply Pattern Protection
@@ -66,7 +66,7 @@ jobs:
         BRANCHES=$(curl -L \
         -H "Accept: application/vnd.github+json" \
         -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-        "https://api.github.com/repos/albertsons/${{ github.event.inputs.repository }}/branches" \
+        "https://api.github.com/repos/saikiranrko/${{ github.event.inputs.repository }}/branches" \
         | jq -r '.[].name')
         
         # Filter branches using regex pattern and apply protection rules
@@ -77,7 +77,7 @@ jobs:
             -X PUT \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-            "https://api.github.com/repos/albertsons/${{ github.event.inputs.repository }}/branches/$branch/protection" \
+            "https://api.github.com/repos/saikiranrko/${{ github.event.inputs.repository }}/branches/$branch/protection" \
             -d '${{ steps.generate-json.outputs.PROTECTION_RULES }}'
           fi
         done
