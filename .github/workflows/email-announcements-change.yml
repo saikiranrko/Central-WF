@@ -25,27 +25,27 @@ on:
       change:
         type: string
         required: true
-        description: 'Change description (use \\n for new lines)'
+        description: 'Change description'
       change_window:
         type: string
         required: true
-        description: 'Time window for the change (use \\n for new lines)'   
+        description: 'Time window for the change'   
       impact:
         type: string
         required: true
-        description: 'Impact of the change (use \\n for new lines)'      
+        description: 'Impact of the change. Paste multiline text as is.'      
       change_summary:
           type: string
           required: true
-          description: 'Summary of the change (use \\n for new lines)'
+          description: 'Summary of the change. Paste multiline text as is.'
       action_needed:
           type: string
           required: true
-          description: 'Actions needed from recipients (use \\n for new lines)' 
+          description: 'Actions needed from recipients. Paste multiline text as is.' 
       note:
           type: string
           required: true
-          description: 'Additional notes (use \\n for new lines)'    
+          description: 'Additional notes. Paste multiline text as is.'    
       
 jobs:
   Make-Announcements:
@@ -54,20 +54,64 @@ jobs:
       - name: checkout
         uses: actions/checkout@v3 
         
+      - name: Save inputs to files
+        run: |
+          echo '${{ inputs.impact }}' > impact.txt
+          echo '${{ inputs.change_summary }}' > change_summary.txt
+          echo '${{ inputs.action_needed }}' > action_needed.txt
+          echo '${{ inputs.note }}' > note.txt
+      
+      - name: Create Python processor
+        run: |
+          cat > process_multiline.py << 'EOF'
+          import sys
+          
+          def process_multiline(filename):
+              # Read the input file
+              with open(filename, "r") as f:
+                  content = f.read()
+              
+              # Replace newlines with <br> tags for HTML
+              formatted = content.replace('\n', '<br>')
+              
+              return formatted
+          
+          if __name__ == "__main__":
+              if len(sys.argv) < 2:
+                  print("Usage: python process_multiline.py <filename>")
+                  sys.exit(1)
+                  
+              filename = sys.argv[1]
+              result = process_multiline(filename)
+              print(result)
+          EOF
+        
+      - name: Process multiline inputs
+        id: process-inputs
+        run: |
+          impact=$(python3 process_multiline.py impact.txt)
+          change_summary=$(python3 process_multiline.py change_summary.txt)
+          action_needed=$(python3 process_multiline.py action_needed.txt)
+          note=$(python3 process_multiline.py note.txt)
+          
+          echo "impact=$impact" >> $GITHUB_ENV
+          echo "change_summary=$change_summary" >> $GITHUB_ENV
+          echo "action_needed=$action_needed" >> $GITHUB_ENV
+          echo "note=$note" >> $GITHUB_ENV
+      
       - name: Announcement for Change
         id: set-template
         run: |  
             echo "The workflow was triggered by ${{ github.actor }}"
             
-            # Pass to Python script directly - the script will handle formatting
             python set-email-change-template.py \
               "${{ inputs.to }}" \
               "${{ inputs.change }}" \
               "${{ inputs.change_window }}" \
-              "${{ inputs.impact }}" \
-              "${{ inputs.change_summary }}" \
-              "${{ inputs.action_needed }}" \
-              "${{ inputs.note }}"
+              "${{ env.impact }}" \
+              "${{ env.change_summary }}" \
+              "${{ env.action_needed }}" \
+              "${{ env.note }}"
       
       - name: Send test Mail 
         if: ${{ inputs.test_email == true }}
@@ -106,5 +150,5 @@ jobs:
       
       - name: Clean Workspace
         run: |
-          rm -f email.html
+          rm -f email.html impact.txt change_summary.txt action_needed.txt note.txt process_multiline.py
           echo "Workspace cleared for run ID ${{ github.run_number }}"
