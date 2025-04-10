@@ -1,4 +1,4 @@
-name: Send Email
+name: Send_Email
 
 on:
   push:
