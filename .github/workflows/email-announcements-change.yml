@@ -11,7 +11,6 @@ on:
       change_id:
         type: string
         required: false
-        default: 'CHG-123'
         description: 'ID of the change'
       to:
         type: string
@@ -20,7 +19,6 @@ on:
       bcc:
         type: string
         required: false
-        default: ''
         description: 'BCC recipients (comma-separated emails)'     
       change:
         type: string
@@ -60,13 +58,6 @@ jobs:
             echo "The workflow was triggered by ${{ github.actor }}"
             python set-email-change-template.py """${{ inputs.to }}""" """${{ inputs.change }}""" """${{ inputs.change_window }}""" """${{ inputs.impact }}""" """${{ inputs.change_summary }}""" """${{ inputs.action_needed }}""" """${{ inputs.note }}"""                   
       
-      - name: Print debug info
-        run: |
-          echo "To: '${{ inputs.to }}'"
-          echo "Change ID: '${{ inputs.change_id }}'"
-          ls -la
-          cat email.html || echo "Email file not found"
-      
       - name: Send test Mail 
         if: ${{ inputs.test_email == true }}
         uses: dawidd6/action-send-mail@v3
@@ -79,6 +70,7 @@ jobs:
           html_body: file://${{ github.workspace }}/email.html
           to: saikiran9487@gmail.com
           from: ${{ secrets.SMTP_USERNAME }}
+          attachments: logo.JPG
       
       - name: Send Template Mail 
         if: ${{ inputs.test_email == false }}
@@ -92,6 +84,7 @@ jobs:
           html_body: file://${{ github.workspace }}/email.html
           to: ${{ inputs.to }}
           from: ${{ secrets.SMTP_USERNAME }}
+          attachments: logo.JPG
           bcc: ${{ inputs.bcc }}
       
       - name: Github Step Summary
