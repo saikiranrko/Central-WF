@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+table, th, td {
+  border: 1px solid black;
+  border-collapse: collapse;
+  text-align: left;
+}
+th {
+  background-color: rgb(189, 214, 238);
+  font-weight: bold;
+  padding: 8px;
+}
+td {
+  padding: 8px;
+}
+.header-cell {
+  background-color: rgb(189, 214, 238);
+  font-weight: bold;
+  width: 180px; /* Fixed width for first column */
+  vertical-align: middle;
+  text-align: left;
+  text-align: center;
+}
+.content-cell {
+  font-weight: normal;
+  white-space: pre-wrap !important; /* This preserves multiline text */
+}
+.normal-text {
+  font-weight: normal !important;
+}
+.logo-cell {
+  text-align: center;
+}
+</style>
+</head>
+<body>
+<table style="width:100%; max-width:1100px;">
+<tr>
+<th style="width:40%; text-transform:uppercase;">Change Notification</th>
+<td class="logo-cell" style="background-color:white;"><img src="logo.JPG" alt="Logo"></td>
+</tr>
+<tr>
+<td colspan="2">
+<strong>TO:</strong> {{to_placeholder}}<br>
+<strong>CHANGE:</strong> {{change_placeholder}}<br>
+<strong>CHANGE WINDOW:</strong> {{change_window_placeholder}}
+</td>
+</tr>
+<tr>
+<td class="header-cell">IMPACT</td>
+<td class="content-cell">{{impact_placeholder}}</td>
+</tr>
+<tr>
+<td class="header-cell">CHANGE SUMMARY</td>
+<td class="content-cell">{{change_summary_placeholder}}</td>
+</tr>
+<tr>
+<td class="header-cell">ACTION NEEDED</td>
+<td class="content-cell">{{action_needed_placeholder}}</td>
+</tr>
+<tr>
+<td class="header-cell">NOTE</td>
+<td class="content-cell">{{note_placeholder}}</td>
+</tr>
+</table>
+</body>
+</html>
