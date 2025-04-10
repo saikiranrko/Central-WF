@@ -25,27 +25,27 @@ on:
       change:
         type: string
         required: true
-        description: 'Change description'
+        description: 'Change description (use \\n for new lines)'
       change_window:
         type: string
         required: true
-        description: 'Time window for the change'   
+        description: 'Time window for the change (use \\n for new lines)'   
       impact:
         type: string
         required: true
-        description: 'Impact of the change'      
+        description: 'Impact of the change (use \\n for new lines)'      
       change_summary:
           type: string
           required: true
-          description: 'Summary of the change'
+          description: 'Summary of the change (use \\n for new lines)'
       action_needed:
           type: string
           required: true
-          description: 'Actions needed from recipients' 
+          description: 'Actions needed from recipients (use \\n for new lines)' 
       note:
           type: string
           required: true
-          description: 'Additional notes'    
+          description: 'Additional notes (use \\n for new lines)'    
       
 jobs:
   Make-Announcements:
@@ -59,35 +59,15 @@ jobs:
         run: |  
             echo "The workflow was triggered by ${{ github.actor }}"
             
-            # Create files with multiline content preserved
-            echo '${{ inputs.impact }}' > impact.txt
-            echo '${{ inputs.change }}' > change.txt
-            echo '${{ inputs.change_window }}' > change_window.txt
-            echo '${{ inputs.change_summary }}' > change_summary.txt
-            echo '${{ inputs.action_needed }}' > action_needed.txt
-            echo '${{ inputs.note }}' > note.txt
-            
-            # Read the content with newlines preserved
-            impact=$(cat impact.txt)
-            change=$(cat change.txt)
-            change_window=$(cat change_window.txt)
-            change_summary=$(cat change_summary.txt)
-            action_needed=$(cat action_needed.txt)
-            note=$(cat note.txt)
-            
-            # Debug
-            echo "Debug - Impact content:"
-            echo "$impact" | cat -A  # Show special chars
-            
-            # Pass to Python script with quotes to preserve spaces and newlines
+            # Pass to Python script directly - the script will handle formatting
             python set-email-change-template.py \
               "${{ inputs.to }}" \
-              "$change" \
-              "$change_window" \
-              "$impact" \
-              "$change_summary" \
-              "$action_needed" \
-              "$note"
+              "${{ inputs.change }}" \
+              "${{ inputs.change_window }}" \
+              "${{ inputs.impact }}" \
+              "${{ inputs.change_summary }}" \
+              "${{ inputs.action_needed }}" \
+              "${{ inputs.note }}"
       
       - name: Send test Mail 
         if: ${{ inputs.test_email == true }}
@@ -126,5 +106,5 @@ jobs:
       
       - name: Clean Workspace
         run: |
-          rm -f email.html impact.txt change.txt change_window.txt change_summary.txt action_needed.txt note.txt
+          rm -f email.html
           echo "Workspace cleared for run ID ${{ github.run_number }}"
