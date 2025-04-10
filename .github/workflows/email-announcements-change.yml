@@ -1,0 +1,104 @@
+name: Announcement for Change
+run-name: "Announcement for Change # ${{ inputs.change_id }}"
+on:
+  workflow_dispatch:
+    inputs:
+      test_email:
+        type: boolean
+        required: true
+        default: true
+        description: 'Send a test email to the specified test email'
+      change_id:
+        type: string
+        required: false
+        description: 'ID of the change'
+      to:
+        type: string
+        required: true
+        description: 'Recipients (comma-separated emails)'   
+      bcc:
+        type: string
+        required: true
+        description: 'BCC recipients (comma-separated emails)'     
+      change:
+        type: string
+        required: true
+        description: 'Change description'
+      change_window:
+        type: string
+        required: true
+        description: 'Time window for the change'   
+      impact:
+        type: string
+        required: true
+        description: 'Impact of the change'      
+      change_summary:
+          type: string
+          required: true
+          description: 'Summary of the change'
+      action_needed:
+          type: string
+          required: true
+          description: 'Actions needed from recipients' 
+      note:
+          type: string
+          required: true
+          description: 'Additional notes'    
+      test_recipient:
+          type: string
+          required: false
+          default: 'saikiran9487@gmail.com'
+          description: 'Email address for test emails'
+      
+jobs:
+  Make-Announcements:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3 
+        
+      - name: Announcement for Change
+        id: set-template
+        run: |  
+            echo "The workflow was triggered by ${{ github.actor }}"
+            python set-email-change-template.py """${{ inputs.to }}""" """${{ inputs.change }}""" """${{ inputs.change_window }}""" """${{ inputs.impact }}""" """${{ inputs.change_summary }}""" """${{ inputs.action_needed }}""" """${{ inputs.note }}"""                   
+      
+      - name: Send test Mail 
+        if: ${{ inputs.test_email == true }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: Test Notification Email- ${{ inputs.change_id }}
+          html_body: file://${{ github.workspace }}/email.html
+          to: ${{ inputs.test_recipient }}
+          from: ${{ secrets.SMTP_USERNAME }}
+          attachments: logo.JPG
+      
+      - name: Send Template Mail 
+        if: ${{ inputs.test_email == false }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: Test Notification Email - ${{ inputs.change_id }}
+          html_body: file://${{ github.workspace }}/email.html
+          to: ${{ inputs.to }}
+          bcc: ${{ inputs.bcc }}
+          from: ${{ secrets.SMTP_USERNAME }}
+          attachments: logo.JPG         
+      
+      - name: Github Step Summary
+        run: |
+          echo "Change: ${{ inputs.change }}" >> $GITHUB_STEP_SUMMARY
+          echo "Recipients: ${{ inputs.to }}" >> $GITHUB_STEP_SUMMARY
+          echo "Change window: ${{ inputs.change_window }}" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Clean Workspace
+        run: |
+          rm -f email.html
+          echo "Workspace cleared for run ID ${{ github.run_number }}"
