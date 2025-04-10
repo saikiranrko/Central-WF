@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import sys
+import html
 
 # Check if we have enough arguments
 if len(sys.argv) < 8:
@@ -17,8 +18,10 @@ note = sys.argv[7]
 
 # Function to preserve line breaks in HTML
 def preserve_line_breaks(text):
-    # Replace newlines with HTML line breaks
-    return text.replace('\n', '<br>')
+    # First escape any HTML in the input
+    escaped_text = html.escape(text)
+    # Replace newlines with explicit HTML breaks
+    return escaped_text.replace('\n', '<br>\n')
 
 # Determine the template file path
 template_file = 'email_change_template.html'
@@ -47,12 +50,16 @@ except Exception as e:
     print(f"Error reading template file: {e}")
     sys.exit(1)
 
+# Print the inputs to debug newlines
+print("Debug - Impact input:")
+print(repr(impact))
+
 # Generate the final HTML content by replacing placeholders
 # Apply preserve_line_breaks to all text content fields
 html_content = html_template \
     .replace('{{to_placeholder}}', to_input) \
-    .replace('{{change_placeholder}}', change) \
-    .replace('{{change_window_placeholder}}', change_window) \
+    .replace('{{change_placeholder}}', preserve_line_breaks(change)) \
+    .replace('{{change_window_placeholder}}', preserve_line_breaks(change_window)) \
     .replace('{{impact_placeholder}}', preserve_line_breaks(impact)) \
     .replace('{{change_summary_placeholder}}', preserve_line_breaks(summary)) \
     .replace('{{action_needed_placeholder}}', preserve_line_breaks(action)) \
