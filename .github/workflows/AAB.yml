@@ -45,7 +45,7 @@ jobs:
           ENV: ${{ inputs.environment_name }}
           SCENARIO: ${{ inputs.test_scenario }}
         run: |
-          python -c "
+          python -c '
 import os
 import requests
 import json
@@ -180,7 +180,7 @@ else:
     print(final_response.text)
 
 print('\\nProcess completed')
-          "
+          '
 
       - name: Summary
         run: |
