@@ -37,150 +37,154 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
-      - name: Update Deployment Branch Policy
+      - name: Create test script
+        run: |
+          cat > test_env_protection.py << 'EOF'
+          import os
+          import requests
+          import json
+          import sys
+
+          # Get configuration from environment variables
+          GITHUB_TOKEN = os.environ['GITHUB_TOKEN']
+          OWNER = os.environ['OWNER']
+          REPO = os.environ['REPO']
+          ENV = os.environ['ENV']
+          SCENARIO = os.environ['SCENARIO']
+
+          # GitHub API URL
+          API_URL = 'https://api.github.com'
+
+          # Headers for authentication
+          headers = {
+              'Authorization': f'token {GITHUB_TOKEN}',
+              'Accept': 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+              'Content-Type': 'application/json'
+          }
+
+          print(f'Updating deployment branch policy for {OWNER}/{REPO} environment: {ENV}')
+          print(f'Running test scenario: {SCENARIO}')
+
+          # Step 1: Get branch protection rules
+          print('\nFetching branch protection rules...')
+          branch_rules_url = f'{API_URL}/repos/{OWNER}/{REPO}/branches?protected=true'
+          branch_response = requests.get(branch_rules_url, headers=headers)
+
+          if branch_response.status_code != 200:
+              print(f'Error fetching protected branches: {branch_response.status_code}')
+              print(branch_response.text)
+              sys.exit(1)
+
+          protected_branches = branch_response.json()
+          branch_patterns = [branch['name'] for branch in protected_branches]
+          print(f'Protected branches: {branch_patterns}')
+
+          # Step: 2: Check if environment exists
+          print('\nChecking if environment exists...')
+          env_url = f'{API_URL}/repos/{OWNER}/{REPO}/environments/{ENV}'
+          env_response = requests.get(env_url, headers=headers)
+
+          if env_response.status_code != 200:
+              print(f'Environment {ENV} does not exist or cannot be accessed: {env_response.status_code}')
+              print(env_response.text)
+              sys.exit(1)
+
+          print(f'Environment {ENV} exists')
+
+          # Step 3: Update deployment branch policy
+          print('\nUpdating deployment branch policy...')
+
+          # Construct payload based on scenario
+          if SCENARIO == 'with-empty-array':
+              payload = {
+                  'deployment_branch_policy': {
+                      'protected_branches': False,
+                      'custom_branch_policies': True,
+                      'custom_branches': []  # Explicit empty array
+                  }
+              }
+              print('Using payload WITH explicit empty array')
+          else:
+              payload = {
+                  'deployment_branch_policy': {
+                      'protected_branches': False,
+                      'custom_branch_policies': True
+                      # No custom_branches field
+                  }
+              }
+              print('Using payload WITHOUT explicit empty array')
+
+          print(f'Payload: {json.dumps(payload, indent=2)}')
+          update_response = requests.put(env_url, json=payload, headers=headers)
+
+          if update_response.status_code != 200:
+              print(f'Error updating deployment branch policy: {update_response.status_code}')
+              print(update_response.text)
+              sys.exit(1)
+
+          print('Deployment branch policy updated successfully')
+
+          # Step 4: Check current branch policies
+          print('\nChecking current branch policies after update...')
+          policies_url = f'{API_URL}/repos/{OWNER}/{REPO}/environments/{ENV}/deployment-branch-policies'
+          policies_response = requests.get(policies_url, headers=headers)
+
+          if policies_response.status_code == 200:
+              policies = policies_response.json()
+              print(f'Current branch policies: {json.dumps(policies, indent=2)}')
+          else:
+              print(f'Error fetching current branch policies: {policies_response.status_code}')
+              print(policies_response.text)
+
+          # Step 5: Add branch patterns
+          print('\nAdding branch patterns...')
+          for pattern in branch_patterns:
+              print(f'Adding pattern: {pattern}')
+              branch_payload = {'name': pattern}
+              branch_response = requests.post(policies_url, json=branch_payload, headers=headers)
+              
+              if branch_response.status_code in [200, 201]:
+                  print(f'Successfully added pattern: {pattern}')
+              else:
+                  print(f'Error adding pattern {pattern}: {branch_response.status_code}')
+                  print(branch_response.text)
+
+          # Step 6: Add tag patterns (same as branch patterns)
+          print('\nAdding tag patterns...')
+          for pattern in branch_patterns:
+              print(f'Adding tag pattern: {pattern}')
+              tag_payload = {'name': pattern, 'type': 'tag'}
+              tag_response = requests.post(policies_url, json=tag_payload, headers=headers)
+              
+              if tag_response.status_code in [200, 201]:
+                  print(f'Successfully added tag pattern: {pattern}')
+              else:
+                  print(f'Error adding tag pattern {pattern}: {tag_response.status_code}')
+                  print(tag_response.text)
+
+          # Step 7: Final check of branch policies
+          print('\nFinal check of branch policies...')
+          final_response = requests.get(policies_url, headers=headers)
+
+          if final_response.status_code == 200:
+              final_policies = final_response.json()
+              print(f'Final branch policies: {json.dumps(final_policies, indent=2)}')
+          else:
+              print(f'Error fetching final branch policies: {final_response.status_code}')
+              print(final_response.text)
+
+          print('\nProcess completed')
+          EOF
+
+      - name: Run test script
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OWNER: ${{ github.repository_owner }}
           REPO: ${{ inputs.repo_name }}
           ENV: ${{ inputs.environment_name }}
           SCENARIO: ${{ inputs.test_scenario }}
-        run: |
-          python -c '
-import os
-import requests
-import json
-
-# Get configuration from environment variables
-GITHUB_TOKEN = os.environ['GITHUB_TOKEN']
-OWNER = os.environ['OWNER']
-REPO = os.environ['REPO']
-ENV = os.environ['ENV']
-SCENARIO = os.environ['SCENARIO']
-
-# GitHub API URL
-API_URL = 'https://api.github.com'
-
-# Headers for authentication
-headers = {
-    'Authorization': f'token {GITHUB_TOKEN}',
-    'Accept': 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28',
-    'Content-Type': 'application/json'
-}
-
-print(f'Updating deployment branch policy for {OWNER}/{REPO} environment: {ENV}')
-print(f'Running test scenario: {SCENARIO}')
-
-# Step 1: Get branch protection rules
-print('\\nFetching branch protection rules...')
-branch_rules_url = f'{API_URL}/repos/{OWNER}/{REPO}/branches?protected=true'
-branch_response = requests.get(branch_rules_url, headers=headers)
-
-if branch_response.status_code != 200:
-    print(f'Error fetching protected branches: {branch_response.status_code}')
-    print(branch_response.text)
-    exit(1)
-
-protected_branches = branch_response.json()
-branch_patterns = [branch['name'] for branch in protected_branches]
-print(f'Protected branches: {branch_patterns}')
-
-# Step: 2: Check if environment exists
-print('\\nChecking if environment exists...')
-env_url = f'{API_URL}/repos/{OWNER}/{REPO}/environments/{ENV}'
-env_response = requests.get(env_url, headers=headers)
-
-if env_response.status_code != 200:
-    print(f'Environment {ENV} does not exist or cannot be accessed: {env_response.status_code}')
-    print(env_response.text)
-    exit(1)
-
-print(f'Environment {ENV} exists')
-
-# Step 3: Update deployment branch policy
-print('\\nUpdating deployment branch policy...')
-
-# Construct payload based on scenario
-if SCENARIO == 'with-empty-array':
-    payload = {
-        'deployment_branch_policy': {
-            'protected_branches': False,
-            'custom_branch_policies': True,
-            'custom_branches': []  # Explicit empty array
-        }
-    }
-    print('Using payload WITH explicit empty array')
-else:
-    payload = {
-        'deployment_branch_policy': {
-            'protected_branches': False,
-            'custom_branch_policies': True
-            # No custom_branches field
-        }
-    }
-    print('Using payload WITHOUT explicit empty array')
-
-print(f'Payload: {json.dumps(payload, indent=2)}')
-update_response = requests.put(env_url, json=payload, headers=headers)
-
-if update_response.status_code != 200:
-    print(f'Error updating deployment branch policy: {update_response.status_code}')
-    print(update_response.text)
-    exit(1)
-
-print('Deployment branch policy updated successfully')
-
-# Step 4: Check current branch policies
-print('\\nChecking current branch policies after update...')
-policies_url = f'{API_URL}/repos/{OWNER}/{REPO}/environments/{ENV}/deployment-branch-policies'
-policies_response = requests.get(policies_url, headers=headers)
-
-if policies_response.status_code == 200:
-    policies = policies_response.json()
-    print(f'Current branch policies: {json.dumps(policies, indent=2)}')
-else:
-    print(f'Error fetching current branch policies: {policies_response.status_code}')
-    print(policies_response.text)
-
-# Step 5: Add branch patterns
-print('\\nAdding branch patterns...')
-for pattern in branch_patterns:
-    print(f'Adding pattern: {pattern}')
-    branch_payload = {'name': pattern}
-    branch_response = requests.post(policies_url, json=branch_payload, headers=headers)
-    
-    if branch_response.status_code in [200, 201]:
-        print(f'Successfully added pattern: {pattern}')
-    else:
-        print(f'Error adding pattern {pattern}: {branch_response.status_code}')
-        print(branch_response.text)
-
-# Step 6: Add tag patterns (same as branch patterns)
-print('\\nAdding tag patterns...')
-for pattern in branch_patterns:
-    print(f'Adding tag pattern: {pattern}')
-    tag_payload = {'name': pattern, 'type': 'tag'}
-    tag_response = requests.post(policies_url, json=tag_payload, headers=headers)
-    
-    if tag_response.status_code in [200, 201]:
-        print(f'Successfully added tag pattern: {pattern}')
-    else:
-        print(f'Error adding tag pattern {pattern}: {tag_response.status_code}')
-        print(tag_response.text)
-
-# Step 7: Final check of branch policies
-print('\\nFinal check of branch policies...')
-final_response = requests.get(policies_url, headers=headers)
-
-if final_response.status_code == 200:
-    final_policies = final_response.json()
-    print(f'Final branch policies: {json.dumps(final_policies, indent=2)}')
-else:
-    print(f'Error fetching final branch policies: {final_response.status_code}')
-    print(final_response.text)
-
-print('\\nProcess completed')
-          '
+        run: python test_env_protection.py
 
       - name: Summary
         run: |
