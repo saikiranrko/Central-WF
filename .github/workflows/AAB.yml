@@ -22,9 +22,6 @@ on:
 
 jobs:
   update-environment-protection:
-    permissions:
-      contents: read
-      deployments: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -182,7 +179,7 @@ jobs:
 
       - name: Run test script
         env:
-          GITHUB_TOKEN: ${{ secrets.ENV_MGMT_PAT }}
+          GITHUB_TOKEN: ${{ secrets.PAT}}
           OWNER: ${{ github.repository_owner }}
           REPO: ${{ inputs.repo_name }}
           ENV: ${{ inputs.environment_name }}
