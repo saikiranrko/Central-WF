@@ -1,0 +1,70 @@
+name: Large Image Detection in PRs
+on:
+  workflow_call:
+    inputs:
+      MAX_IMAGE_SIZE_KB:
+        type: number
+        required: false
+        default: 80
+        description: "Maximum allowed image size in KB"
+    secrets:
+      GITHUB_TOKEN:
+        required: true
+
+jobs:
+  large-image-detection:
+    name: Check Large Images
+    runs-on: ubuntu-latest  # Changed from [AUT] to ubuntu-latest for GitHub hosted runners
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Check for large images
+        run: |
+          MAX_SIZE_KB=${{ inputs.MAX_IMAGE_SIZE_KB }}
+          MAX_SIZE_BYTES=$((MAX_SIZE_KB * 1024))
+          
+          echo "🔍 Checking for images larger than ${MAX_SIZE_KB}KB..."
+          
+          # Get changed files in PR
+          git diff --name-only ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} > changed_files.txt
+          
+          echo "📁 Changed files:"
+          cat changed_files.txt
+          
+          # Find image files and check their sizes
+          VIOLATIONS=""
+          VIOLATION_COUNT=0
+          
+          while IFS= read -r file; do
+            if [[ -f "$file" && "$file" =~ \.(png|jpg|jpeg|gif|bmp|tiff|webp|svg)$ ]]; then
+              FILE_SIZE=$(stat -c%s "$file" 2>/dev/null || echo "0")
+              FILE_SIZE_KB=$((FILE_SIZE / 1024))
+              
+              echo "📊 Checking: $file (${FILE_SIZE_KB}KB)"
+              
+              if [[ $FILE_SIZE -gt $MAX_SIZE_BYTES ]]; then
+                echo "❌ $file: ${FILE_SIZE_KB}KB (exceeds ${MAX_SIZE_KB}KB)"
+                VIOLATIONS="$VIOLATIONS\n❌ $file: ${FILE_SIZE_KB}KB"
+                VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+              else
+                echo "✅ $file: ${FILE_SIZE_KB}KB"
+              fi
+            fi
+          done < changed_files.txt
+          
+          # Fail if violations found
+          if [[ $VIOLATION_COUNT -gt 0 ]]; then
+            echo ""
+            echo "🚨 Found $VIOLATION_COUNT large image(s):"
+            echo -e "$VIOLATIONS"
+            echo ""
+            echo "Please optimize these images to under ${MAX_SIZE_KB}KB"
+            exit 1
+          else
+            echo "✅ No large images found"
+          fi
