@@ -8,18 +8,18 @@ on:
         default: 80
         description: "Maximum allowed image size in KB"
     secrets:
-      GITHUB_TOKEN:
+      PERSONAL_ACCESS_TOKEN:
         required: true
 
 jobs:
   large-image-detection:
     name: Check Large Images
-    runs-on: ubuntu-latest  # Changed from [AUT] to ubuntu-latest for GitHub hosted runners
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout with submodules
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           fetch-depth: 0
           submodules: recursive
 
@@ -30,13 +30,11 @@ jobs:
           
           echo "🔍 Checking for images larger than ${MAX_SIZE_KB}KB..."
           
-          # Get changed files in PR
           git diff --name-only ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} > changed_files.txt
           
           echo "📁 Changed files:"
           cat changed_files.txt
           
-          # Find image files and check their sizes
           VIOLATIONS=""
           VIOLATION_COUNT=0
           
@@ -57,7 +55,6 @@ jobs:
             fi
           done < changed_files.txt
           
-          # Fail if violations found
           if [[ $VIOLATION_COUNT -gt 0 ]]; then
             echo ""
             echo "🚨 Found $VIOLATION_COUNT large image(s):"
