@@ -1,0 +1,194 @@
+name: Upload Artifactory Artifact to Azure File Share
+
+on:
+  workflow_call:
+    inputs:
+      artifact_path:
+        description: 'Path to the artifact in JFrog Artifactory (e.g., libs-release-local/com/example/app/1.0.0/app-1.0.0.zip)'
+        required: true
+        type: string
+      azure_fileshare_path:
+        description: 'Azure file share directory path (e.g., production/plugins). Leave empty for root.'
+        required: false
+        type: string
+        default: ''
+      overwrite:
+        description: 'Whether to overwrite existing files in file share (true/false)'
+        required: false
+        type: string
+        default: 'true'
+      artifactory_url:
+        description: 'JFrog Artifactory base URL'
+        required: true
+        type: string
+    secrets:
+      AZURE_FILESHARE_SAS_TOKEN_URL:
+        description: 'Azure File Share SAS token URL'
+        required: true
+      ARTIFACTORY_USERNAME:
+        description: 'JFrog Artifactory username'
+        required: true
+      ARTIFACTORY_PASSWORD:
+        description: 'JFrog Artifactory password'
+        required: true
+
+jobs:
+  upload-artifact-to-fileshare:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Download artifact from JFrog Artifactory
+        id: download-artifact
+        run: |
+          echo "=========================================="
+          echo "Step 1: Download Artifact from JFrog"
+          echo "=========================================="
+          echo "Downloading artifact: ${{ inputs.artifact_path }}"
+          
+          ARTIFACT_FILE=$(basename "${{ inputs.artifact_path }}")
+          
+          echo "Artifact filename: $ARTIFACT_FILE"
+          echo "Full artifactory URL: ${{ inputs.artifactory_url }}/${{ inputs.artifact_path }}"
+          
+          echo "Downloading from JFrog Artifactory..."
+          curl -f -sS -u "${{ secrets.ARTIFACTORY_USERNAME }}:${{ secrets.ARTIFACTORY_PASSWORD }}" \
+            -o "$ARTIFACT_FILE" \
+            "${{ inputs.artifactory_url }}/${{ inputs.artifact_path }}"
+          
+          if [ $? -eq 0 ]; then
+            echo "✓ Download completed successfully!"
+            ls -lh "$ARTIFACT_FILE"
+          else
+            echo "✗ Download failed!"
+            exit 1
+          fi
+          
+          echo "artifact_file=$ARTIFACT_FILE" >> $GITHUB_OUTPUT
+      
+      - name: Unzip the Artifact
+        id: unzip-artifact
+        run: |
+          echo "=========================================="
+          echo "Step 2: Unzip the Artifact"
+          echo "=========================================="
+          
+          ARTIFACT_FILE="${{ steps.download-artifact.outputs.artifact_file }}"
+          
+          if [[ "$ARTIFACT_FILE" == *.zip ]]; then
+            echo "ZIP file detected: $ARTIFACT_FILE"
+            
+            EXTRACT_DIR="extracted_content"
+            mkdir -p "$EXTRACT_DIR"
+            
+            echo "Extracting to: $EXTRACT_DIR"
+            unzip -o "$ARTIFACT_FILE" -d "$EXTRACT_DIR"
+            
+            if [ $? -eq 0 ]; then
+              echo "✓ Extraction completed successfully!"
+              ls -laR "$EXTRACT_DIR"
+              
+              echo "extracted_path=$(pwd)/$EXTRACT_DIR" >> $GITHUB_OUTPUT
+              echo "is_zip=true" >> $GITHUB_OUTPUT
+            else
+              echo "✗ Extraction failed!"
+              exit 1
+            fi
+          else
+            echo "Not a ZIP file - will upload as single file"
+            echo "extracted_path=" >> $GITHUB_OUTPUT
+            echo "is_zip=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Copy the Application Folder
+        id: prepare-upload
+        run: |
+          echo "=========================================="
+          echo "Step 3: Copy the Application Folder"
+          echo "=========================================="
+          
+          IS_ZIP="${{ steps.unzip-artifact.outputs.is_zip }}"
+          ARTIFACT_FILE="${{ steps.download-artifact.outputs.artifact_file }}"
+          EXTRACTED_PATH="${{ steps.unzip-artifact.outputs.extracted_path }}"
+          
+          if [ "$IS_ZIP" == "true" ]; then
+            echo "Preparing extracted application folder for upload"
+            UPLOAD_SOURCE="$EXTRACTED_PATH"
+            ls -laR "$UPLOAD_SOURCE"
+          else
+            echo "Preparing single file for upload"
+            UPLOAD_SOURCE="$ARTIFACT_FILE"
+            ls -lh "$UPLOAD_SOURCE"
+          fi
+          
+          echo "upload_source=$UPLOAD_SOURCE" >> $GITHUB_OUTPUT
+      
+      - name: Install azcopy
+        run: |
+          echo "Installing azcopy..."
+          wget -q https://aka.ms/downloadazcopy-v10-linux -O azcopy.tar.gz
+          tar -xzf azcopy.tar.gz --strip-components=1
+          sudo mv azcopy /usr/local/bin/
+          sudo chmod +x /usr/local/bin/azcopy
+          azcopy --version
+      
+      - name: Upload to Azure File Share
+        run: |
+          echo "=========================================="
+          echo "Step 4: Upload to Azure File Share"
+          echo "=========================================="
+          
+          UPLOAD_SOURCE="${{ steps.prepare-upload.outputs.upload_source }}"
+          IS_ZIP="${{ steps.unzip-artifact.outputs.is_zip }}"
+          FILESHARE_PATH="${{ inputs.azure_fileshare_path }}"
+          OVERWRITE="${{ inputs.overwrite }}"
+          
+          echo "Upload source: $UPLOAD_SOURCE"
+          echo "File share path: ${FILESHARE_PATH:-'(root)'}"
+          echo "Overwrite existing: $OVERWRITE"
+          
+          # Build destination URL
+          if [ -z "$FILESHARE_PATH" ]; then
+            DEST_URL="${{ secrets.AZURE_FILESHARE_SAS_TOKEN_URL }}"
+          else
+            BASE_URL="${{ secrets.AZURE_FILESHARE_SAS_TOKEN_URL }}"
+            URL_WITHOUT_QUERY="${BASE_URL%%\?*}"
+            QUERY_STRING="${BASE_URL#*\?}"
+            DEST_URL="${URL_WITHOUT_QUERY}/${FILESHARE_PATH}?${QUERY_STRING}"
+          fi
+          
+          # Upload
+          if [ "$IS_ZIP" == "true" ]; then
+            echo "Uploading directory contents recursively..."
+            azcopy cp "$UPLOAD_SOURCE/*" "$DEST_URL" \
+              --recursive=true \
+              --overwrite=$OVERWRITE
+          else
+            echo "Uploading single file..."
+            azcopy cp "$UPLOAD_SOURCE" "$DEST_URL/" \
+              --overwrite=$OVERWRITE
+          fi
+          
+          if [ $? -eq 0 ]; then
+            echo "✓ Upload completed successfully!"
+          else
+            echo "✗ Upload failed!"
+            exit 1
+          fi
+      
+      - name: Verify upload and list file share contents
+        run: |
+          echo "=========================================="
+          echo "Verification: List File Share Contents"
+          echo "=========================================="
+          
+          FILESHARE_PATH="${{ inputs.azure_fileshare_path }}"
+          
+          if [ -z "$FILESHARE_PATH" ]; then
+            azcopy list "${{ secrets.AZURE_FILESHARE_SAS_TOKEN_URL }}"
+          else
+            BASE_URL="${{ secrets.AZURE_FILESHARE_SAS_TOKEN_URL }}"
+            URL_WITHOUT_QUERY="${BASE_URL%%\?*}"
+            QUERY_STRING="${BASE_URL#*\?}"
+            LIST_URL="${URL_WITHOUT_QUERY}/${FILESHARE_PATH}?${QUERY_STRING}"
+            azcopy list "$LIST_URL"
+          fi
