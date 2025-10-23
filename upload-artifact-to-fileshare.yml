@@ -29,8 +29,9 @@ on:
         description: 'JFrog Artifactory password'
         required: true
       ARTIFACTORY_URL:
-        description: 'JFrog URL'
-        required: true
+        description: 'JFrog Artifactory URL'
+        required: false
+
 
 jobs:
   upload-artifact-to-fileshare:
