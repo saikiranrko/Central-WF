@@ -48,12 +48,12 @@ jobs:
           ARTIFACT_FILE=$(basename "${{ inputs.artifact_path }}")
           
           echo "Artifact filename: $ARTIFACT_FILE"
-          echo "Full artifactory URL: ${{ inputs.artifactory_url }}/${{ inputs.artifact_path }}"
+          echo "Full artifactory URL: ${{ secrets.ARTIFACTORY_URL }}/${{ inputs.artifact_path }}"
           
           echo "Downloading from JFrog Artifactory..."
           curl -f -sS -u "${{ secrets.ARTIFACTORY_USERNAME }}:${{ secrets.ARTIFACTORY_PASSWORD }}" \
             -o "$ARTIFACT_FILE" \
-            "${{ inputs.artifactory_url }}/${{ inputs.artifact_path }}"
+            "${{ secrets.ARTIFACTORY_URL }}/${{ inputs.artifact_path }}"
           
           if [ $? -eq 0 ]; then
             echo "✓ Download completed successfully!"
