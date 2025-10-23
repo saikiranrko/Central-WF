@@ -17,10 +17,7 @@ on:
         required: false
         type: string
         default: 'true'
-      artifactory_url:
-        description: 'JFrog Artifactory base URL'
-        required: true
-        type: string
+
     secrets:
       AZURE_FILESHARE_SAS_TOKEN_URL:
         description: 'Azure File Share SAS token URL'
@@ -30,6 +27,9 @@ on:
         required: true
       ARTIFACTORY_PASSWORD:
         description: 'JFrog Artifactory password'
+        required: true
+      ARTIFACTORY_URL:
+        description: 'JFrog URL'
         required: true
 
 jobs:
