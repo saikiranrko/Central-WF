@@ -18,8 +18,8 @@ on:
         type: string
         default: 'true'
     secrets:
-      AZURE_FILESHARE_SAS_TOKEN_URL:
-        description: 'Azure File Share SAS token URL'
+      ARTIFACTORY_URL:
+        description: 'JFrog Artifactory URL'
         required: true
       ARTIFACTORY_USERNAME:
         description: 'JFrog Artifactory username'
@@ -27,14 +27,13 @@ on:
       ARTIFACTORY_PASSWORD:
         description: 'JFrog Artifactory password'
         required: true
-      ARTIFACTORY_URL:
-        description: 'JFrog Artifactory base URL'
+      AZURE_FILESHARE_SAS_TOKEN_URL:
+        description: 'Azure File Share SAS token URL'
         required: true
 
 jobs:
   upload-artifact-to-fileshare:
     runs-on: ubuntu-latest
-
     steps:
       - name: Download artifact from JFrog Artifactory
         id: download-artifact
@@ -43,7 +42,7 @@ jobs:
           echo "Step 1: Download Artifact from JFrog"
           echo "=========================================="
           echo "Downloading artifact: ${{ inputs.artifact_path }}"
-
+          
           ARTIFACT_FILE=$(basename "${{ inputs.artifact_path }}")
 
           echo "Artifact filename: $ARTIFACT_FILE"
@@ -52,6 +51,7 @@ jobs:
           curl -f -sS -u "${{ secrets.ARTIFACTORY_USERNAME }}:${{ secrets.ARTIFACTORY_PASSWORD }}" \
             -o "$ARTIFACT_FILE" \
             "${{ secrets.ARTIFACTORY_URL }}/${{ inputs.artifact_path }}"
+
 
           if [ $? -eq 0 ]; then
             echo "✓ Download completed successfully!"
