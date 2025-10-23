@@ -4,34 +4,26 @@ on:
   workflow_call:
     inputs:
       artifact_path:
-        description: 'Path to the artifact in JFrog Artifactory (e.g., libs-release-local/com/example/app/1.0.0/app-1.0.0.zip)'
+        type: string
         required: true
-        type: string
       azure_fileshare_path:
-        description: 'Azure file share directory path (e.g., production/plugins). Leave empty for root.'
-        required: false
         type: string
+        required: false
         default: ''
       overwrite:
-        description: 'Whether to overwrite existing files in file share (true/false)'
+        type: string
         required: false
-        type: string
         default: 'true'
-      artifactory_url:
-        description: 'JFrog Artifactory URL'
-        required: true
-        type: string
-
     secrets:
       AZURE_FILESHARE_SAS_TOKEN_URL:
-        description: 'Azure File Share SAS token URL'
         required: true
       ARTIFACTORY_USERNAME:
-        description: 'JFrog Artifactory username'
         required: true
       ARTIFACTORY_PASSWORD:
-        description: 'JFrog Artifactory password'
         required: true
+      ARTIFACTORY_URL:
+        required: true
+
 
 jobs:
   upload-artifact-to-fileshare:
