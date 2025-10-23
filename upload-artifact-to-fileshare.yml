@@ -4,49 +4,37 @@ on:
   workflow_call:
     inputs:
       artifact_path:
-        description: 'Path to the artifact in JFrog Artifactory (e.g., libs-release-local/com/example/app/1.0.0/app-1.0.0.zip)'
+        type: string
         required: true
-        type: string
       azure_fileshare_path:
-        description: 'Azure file share directory path (e.g., production/plugins). Leave empty for root.'
-        required: false
         type: string
+        required: false
         default: ''
       overwrite:
-        description: 'Whether to overwrite existing files in file share (true/false)'
-        required: false
         type: string
+        required: false
         default: 'true'
     secrets:
       ARTIFACTORY_URL:
-        description: 'JFrog Artifactory base URL'
         required: true
       ARTIFACTORY_USERNAME:
-        description: 'JFrog Artifactory username'
         required: true
       ARTIFACTORY_PASSWORD:
-        description: 'JFrog Artifactory password'
         required: true
       AZURE_FILESHARE_SAS_TOKEN_URL:
-        description: 'Azure File Share SAS token URL'
         required: true
 
 jobs:
-  upload-artifact-to-fileshare:
+  upload:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Download artifact from JFrog Artifactory
-        id: download-artifact
+      - name: Download from Artifactory
         run: |
-          echo "=========================================="
-          echo "Step 1: Download Artifact from JFrog"
-          echo "=========================================="
-          echo "Downloading artifact: ${{ inputs.artifact_path }}"
-          
-          ARTIFACT_FILE=$(basename "${{ inputs.artifact_path }}")
-          echo "Artifact filename: $ARTIFACT_FILE"
-          echo "Full artifactory URL: ${{ secrets.ARTIFACTORY_URL }}/${{ inputs.artifact_path }}"
+          echo "Downloading ${{ inputs.artifact_path }} from ${{ secrets.ARTIFACTORY_URL }}"
+          curl -f -sS -u "${{ secrets.ARTIFACTORY_USERNAME }}:${{ secrets.ARTIFACTORY_PASSWORD }}" \
+            -o "$(basename "${{ inputs.artifact_path }}")" \
+            "${{ secrets.ARTIFACTORY_URL }}/${{ inputs.artifact_path }}"
+
           
           curl -f -sS -u "${{ secrets.ARTIFACTORY_USERNAME }}:${{ secrets.ARTIFACTORY_PASSWORD }}" \
             -o "$ARTIFACT_FILE" \
