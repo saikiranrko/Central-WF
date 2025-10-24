@@ -17,10 +17,6 @@ on:
         required: false
         type: string
         default: 'true'
-      artifactory_url:
-        description: 'JFrog Artifactory base URL'
-        required: true
-        type: string
     secrets:
       AZURE_FILESHARE_SAS_TOKEN_URL:
         description: 'Azure File Share SAS token URL'
@@ -31,6 +27,9 @@ on:
       ARTIFACTORY_PASSWORD:
         description: 'JFrog Artifactory password'
         required: true
+
+env:
+  ARTIFACTORY_URL: "https://unwisely-sweepable-vincent.ngrok-free.dev/artifactory"
 
 jobs:
   upload-artifact-to-fileshare:
@@ -46,14 +45,12 @@ jobs:
           echo "Downloading artifact: ${{ inputs.artifact_path }}"
           
           ARTIFACT_FILE=$(basename "${{ inputs.artifact_path }}")
-          
           echo "Artifact filename: $ARTIFACT_FILE"
-          echo "Full artifactory URL: ${{ inputs.artifactory_url }}/${{ inputs.artifact_path }}"
+          echo "Full Artifactory URL: ${ARTIFACTORY_URL}/${{ inputs.artifact_path }}"
           
-          echo "Downloading from JFrog Artifactory..."
           curl -f -sS -u "${{ secrets.ARTIFACTORY_USERNAME }}:${{ secrets.ARTIFACTORY_PASSWORD }}" \
             -o "$ARTIFACT_FILE" \
-            "${{ inputs.artifactory_url }}/${{ inputs.artifact_path }}"
+            "${ARTIFACTORY_URL}/${{ inputs.artifact_path }}"
           
           if [ $? -eq 0 ]; then
             echo "✓ Download completed successfully!"
@@ -80,7 +77,6 @@ jobs:
             EXTRACT_DIR="extracted_content"
             mkdir -p "$EXTRACT_DIR"
             
-            echo "Extracting to: $EXTRACT_DIR"
             unzip -o "$ARTIFACT_FILE" -d "$EXTRACT_DIR"
             
             if [ $? -eq 0 ]; then
@@ -99,11 +95,11 @@ jobs:
             echo "is_zip=false" >> $GITHUB_OUTPUT
           fi
       
-      - name: Copy the Application Folder
+      - name: Prepare upload source
         id: prepare-upload
         run: |
           echo "=========================================="
-          echo "Step 3: Copy the Application Folder"
+          echo "Step 3: Prepare Upload Source"
           echo "=========================================="
           
           IS_ZIP="${{ steps.unzip-artifact.outputs.is_zip }}"
@@ -111,13 +107,9 @@ jobs:
           EXTRACTED_PATH="${{ steps.unzip-artifact.outputs.extracted_path }}"
           
           if [ "$IS_ZIP" == "true" ]; then
-            echo "Preparing extracted application folder for upload"
             UPLOAD_SOURCE="$EXTRACTED_PATH"
-            ls -laR "$UPLOAD_SOURCE"
           else
-            echo "Preparing single file for upload"
             UPLOAD_SOURCE="$ARTIFACT_FILE"
-            ls -lh "$UPLOAD_SOURCE"
           fi
           
           echo "upload_source=$UPLOAD_SOURCE" >> $GITHUB_OUTPUT
@@ -146,7 +138,6 @@ jobs:
           echo "File share path: ${FILESHARE_PATH:-'(root)'}"
           echo "Overwrite existing: $OVERWRITE"
           
-          # Build destination URL
           if [ -z "$FILESHARE_PATH" ]; then
             DEST_URL="${{ secrets.AZURE_FILESHARE_SAS_TOKEN_URL }}"
           else
@@ -156,16 +147,10 @@ jobs:
             DEST_URL="${URL_WITHOUT_QUERY}/${FILESHARE_PATH}?${QUERY_STRING}"
           fi
           
-          # Upload
           if [ "$IS_ZIP" == "true" ]; then
-            echo "Uploading directory contents recursively..."
-            azcopy cp "$UPLOAD_SOURCE/*" "$DEST_URL" \
-              --recursive=true \
-              --overwrite=$OVERWRITE
+            azcopy cp "$UPLOAD_SOURCE/*" "$DEST_URL" --recursive=true --overwrite=$OVERWRITE
           else
-            echo "Uploading single file..."
-            azcopy cp "$UPLOAD_SOURCE" "$DEST_URL/" \
-              --overwrite=$OVERWRITE
+            azcopy cp "$UPLOAD_SOURCE" "$DEST_URL/" --overwrite=$OVERWRITE
           fi
           
           if [ $? -eq 0 ]; then
