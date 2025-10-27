@@ -187,8 +187,14 @@ jobs:
           
           # Build destination URL based on auth method
           if [ "$AUTH_METHOD" == "connection_string" ]; then
-            # Extract account name from connection string
+            # Extract account name and key from connection string
             ACCOUNT_NAME=$(echo "$AZURE_STORAGE_CONNECTION_STRING" | grep -oP 'AccountName=\K[^;]*')
+            ACCOUNT_KEY=$(echo "$AZURE_STORAGE_CONNECTION_STRING" | grep -oP 'AccountKey=\K[^;]*')
+            
+            # Export for azcopy to use
+            export AZURE_STORAGE_ACCOUNT="$ACCOUNT_NAME"
+            export AZURE_STORAGE_KEY="$ACCOUNT_KEY"
+            
             BASE_URL="https://${ACCOUNT_NAME}.file.core.windows.net/${FILESHARE_NAME}"
             
             if [ -z "$FILESHARE_PATH" ]; then
@@ -200,6 +206,10 @@ jobs:
             echo "Destination URL: $DEST_URL (using connection string auth)"
             
           elif [ "$AUTH_METHOD" == "account_key" ]; then
+            # Export for azcopy to use
+            export AZURE_STORAGE_ACCOUNT="$AZURE_STORAGE_ACCOUNT"
+            export AZURE_STORAGE_KEY="$AZURE_STORAGE_KEY"
+            
             BASE_URL="https://${AZURE_STORAGE_ACCOUNT}.file.core.windows.net/${FILESHARE_NAME}"
             
             if [ -z "$FILESHARE_PATH" ]; then
@@ -261,9 +271,16 @@ jobs:
           FILESHARE_PATH="${{ inputs.azure_fileshare_path }}"
           AUTH_METHOD="${{ steps.auth-method.outputs.auth_method }}"
           
-          # Build list URL based on auth method
+          # Build list URL based on auth method and export credentials
           if [ "$AUTH_METHOD" == "connection_string" ]; then
+            # Extract account name and key from connection string
             ACCOUNT_NAME=$(echo "$AZURE_STORAGE_CONNECTION_STRING" | grep -oP 'AccountName=\K[^;]*')
+            ACCOUNT_KEY=$(echo "$AZURE_STORAGE_CONNECTION_STRING" | grep -oP 'AccountKey=\K[^;]*')
+            
+            # Export for azcopy to use
+            export AZURE_STORAGE_ACCOUNT="$ACCOUNT_NAME"
+            export AZURE_STORAGE_KEY="$ACCOUNT_KEY"
+            
             BASE_URL="https://${ACCOUNT_NAME}.file.core.windows.net/${FILESHARE_NAME}"
             
             if [ -z "$FILESHARE_PATH" ]; then
@@ -273,6 +290,10 @@ jobs:
             fi
             
           elif [ "$AUTH_METHOD" == "account_key" ]; then
+            # Export for azcopy to use
+            export AZURE_STORAGE_ACCOUNT="$AZURE_STORAGE_ACCOUNT"
+            export AZURE_STORAGE_KEY="$AZURE_STORAGE_KEY"
+            
             BASE_URL="https://${AZURE_STORAGE_ACCOUNT}.file.core.windows.net/${FILESHARE_NAME}"
             
             if [ -z "$FILESHARE_PATH" ]; then
