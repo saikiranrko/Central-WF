@@ -222,12 +222,53 @@ jobs:
             fi
           fi
           
+          # Function to create directory structure
+          create_directory() {
+            local dir_path="$1"
+            
+            if [ "$AUTH_METHOD" == "connection_string" ]; then
+              az storage directory create \
+                --share-name "$FILESHARE_NAME" \
+                --name "$dir_path" \
+                --connection-string "$AZURE_STORAGE_CONNECTION_STRING" \
+                --output none 2>/dev/null || true
+            else
+              az storage directory create \
+                --share-name "$FILESHARE_NAME" \
+                --name "$dir_path" \
+                --account-name "$AZURE_STORAGE_ACCOUNT" \
+                --account-key "$AZURE_STORAGE_KEY" \
+                --output none 2>/dev/null || true
+            fi
+          }
+          
           # Upload files
           if [ "$IS_ZIP" == "true" ]; then
             echo "Uploading extracted directory contents..."
             cd "$UPLOAD_SOURCE"
             
-            # Find all files and upload them
+            # First, create all directories
+            echo "Creating directory structure..."
+            find . -type d | while read dir; do
+              # Remove leading ./
+              dir_clean="${dir#./}"
+              
+              # Skip current directory
+              if [ "$dir_clean" == "." ] || [ -z "$dir_clean" ]; then
+                continue
+              fi
+              
+              if [ -z "$FILESHARE_PATH" ]; then
+                full_dir_path="$dir_clean"
+              else
+                full_dir_path="$FILESHARE_PATH/$dir_clean"
+              fi
+              
+              create_directory "$full_dir_path"
+            done
+            
+            # Then upload all files
+            echo "Uploading files..."
             find . -type f | while read file; do
               # Remove leading ./
               file_clean="${file#./}"
@@ -238,7 +279,7 @@ jobs:
                 dest_path="$FILESHARE_PATH/$file_clean"
               fi
               
-              echo "Uploading: $file_clean -> $dest_path"
+              echo "Uploading: $file_clean"
               upload_file "$file" "$dest_path"
             done
             
